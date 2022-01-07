@@ -31,7 +31,7 @@ void thezeostoken::setvk(const name& user, const name& id, const string& vk)
 {
     require_auth(user);
     
-    vks vk_t(get_self(), get_self().value);
+    vks vk_t(get_self(), user.value);
     auto c = vk_t.find(id.value);
     
     if(c == vk_t.end())
