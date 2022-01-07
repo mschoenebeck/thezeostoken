@@ -1,92 +1,9 @@
 #include "thezeostoken.hpp"
-#include "liquidstorage_uri.hpp"
 
 
 thezeostoken::thezeostoken(name self, name code, datastream<const char *> ds) :
     contract(self, code, ds)
 {
-}
-
-void thezeostoken::test(const string& json)
-{
-    print(json);
-}
-
-void thezeostoken::setstoragecfg(const uint64_t &max_file_size_in_bytes,
-                                 const uint64_t &global_upload_limit_per_day,
-                                 const uint64_t &vaccount_upload_limit_per_day)
-{
-    require_auth(get_self());
-    storagecfg_t storagecfg_table(get_self(), get_self().value);
-    auto storagecfg = storagecfg_table.get_or_default();
-
-    storagecfg.max_file_size_in_bytes = max_file_size_in_bytes;
-    storagecfg.global_upload_limit_per_day = global_upload_limit_per_day;
-    storagecfg.vaccount_upload_limit_per_day = vaccount_upload_limit_per_day;
-
-    storagecfg_table.set(storagecfg, get_self());
-}
-
-void thezeostoken::setvk(const name& user, const name& id, const string& vk)
-{
-    require_auth(user);
-    
-    vks vk_t(get_self(), get_self().value);
-    auto c = vk_t.find(id.value);
-    
-    if(c == vk_t.end())
-    {
-        // add new key
-        vk_t.emplace(user, [&](auto& row){
-            row.id = id;
-            row.vk = vk;
-        });
-    }
-    else
-    {
-        // update existing key
-        vk_t.modify(c, user, [&](auto& row){
-            row.vk = vk;
-        });
-    }
-}
-
-void thezeostoken::verifyproof(const name& id, const string& proof, const string& inputs, const string& payload_uri)
-{
-    vks vk_t(get_self(), get_self().value);
-    auto c = vk_t.find(id.value);
-    check(c != vk_t.end(), "id doesn't exist");
-
-    string data = c->vk;
-    data.append("/");
-    data.append(proof);
-    data.append("/");
-    data.append(inputs);
-    
-    string uri = get_liquidstorage_uri(data);
-
-    check(0 == uri.compare(payload_uri), "payload_uri invalid");
-
-    string str = "zeos_verify_proof://";
-    str.append(uri.substr(7)); // cut off "ipfs://" and append to str
-    vector<char> uri_vec(str.begin(), str.end());
-
-    bool valid = getURI(uri_vec, [&](auto& results) { 
-        uint32_t dsp_threshold = 1;
-        // ensure the specified amount of DSPs have responded before a response is accepted
-        eosio::check(results.size() >= dsp_threshold, "require multiple results for consensus");
-        auto itr = results.begin();
-        auto first = itr->result;
-        ++itr;
-        while(itr != results.end())
-        {
-            eosio::check(itr->result == first, "consensus failed");
-            ++itr;
-        }
-        return first;
-    })[0] == '1';
-    
-    check(valid, "proof invalid");
 }
 
 void thezeostoken::create(const name& issuer, const asset& maximum_supply)
