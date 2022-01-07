@@ -1,0 +1,23 @@
+{
+    "version": "1.0.0",
+    "ignore": [
+        ".gitignore"
+    ],
+    "commands": {
+        "Compile contracts": "zeus compile",
+        "Migrate contracts": "zeus migrate",
+        "Test contracts": "zeus test -c"
+    },
+    "hooks": {
+        "post-unpack": "echo hello",
+        "post-install": "git clone ..."
+    },
+    "install": {
+        "npm": {}
+    },
+    "dependencies": {
+        "oracle-web": "",
+        "storage-dapp-service": "",
+        "ipfs-dapp-service": ""
+    }
+}
