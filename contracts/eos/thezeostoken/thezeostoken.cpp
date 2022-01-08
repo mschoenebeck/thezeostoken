@@ -48,7 +48,7 @@ void thezeostoken::verifyproof(const name& code, const name& id, const string& p
     bool valid = getURI(vector<char>(str.begin(), str.end()), [&](auto& results) { 
         uint32_t dsp_threshold = 1;
         // ensure the specified amount of DSPs have responded before a response is accepted
-        eosio::check(results.size() >= dsp_threshold, "require multiple results for consensus");
+        check(results.size() >= dsp_threshold, "require multiple results for consensus");
         auto itr = results.begin();
         auto first = itr->result;
         ++itr;

@@ -1,6 +1,5 @@
 #pragma once
 
-
 // VRAM and LiquidOracle
 #define USE_ADVANCED_IPFS
 #include <eosio/eosio.hpp>
@@ -34,21 +33,7 @@ CONTRACT_START()
         uint64_t primary_key() const { return shard; }
     };
     
-    // This table contains the verifier keys for all circuits [OLD]
-    /*
-    TABLE vk
-    {
-        uint64_t index;
-        string vk_str;
-
-        uint64_t primary_key() const { return index; }
-    };
-    typedef dapp::multi_index<"vks"_n, vk> vks;
-    typedef eosio::multi_index<".vks"_n, vk> vks_t_v_abi;
-    typedef eosio::multi_index<"vks"_n, shardbucket> vks_t_abi;
-    */
-    
-    // This table contains the verifier keys for all circuits [NEW]
+    // verifier keys table
     TABLE verifierkey
     {
         name id;
@@ -60,6 +45,7 @@ CONTRACT_START()
     typedef eosio::multi_index<".verifierkey"_n, verifierkey> vks_t_v_abi;
     typedef eosio::multi_index<"verifierkey"_n, shardbucket> vks_t_abi;
 
+    // token contract tables
     TABLE account
     {
         asset balance;
@@ -78,36 +64,56 @@ CONTRACT_START()
     };
     typedef eosio::multi_index<"stat"_n, currency_stats> stats;
     
-    void sub_balance( const name& owner, const asset& value );
-    void add_balance( const name& owner, const asset& value, const name& ram_payer );
+    void sub_balance(const name& owner,
+                     const asset& value);
+    
+    void add_balance(const name& owner,
+                     const asset& value,
+                     const name& ram_payer);
 
     public:
 
-    thezeostoken(name self, name code, datastream<const char *> ds);
+    thezeostoken(name self,
+                 name code, 
+                 datastream<const char *> ds);
 
     // set verifier key
-    ACTION setvk(const name& code, const name& id, const string& vk);
+    ACTION setvk(const name& code,
+                 const name& id,
+                 const string& vk);
 
     // verify proof
-    ACTION verifyproof(const name& code, const name& id, const string& proof, const string& inputs);
+    ACTION verifyproof(const name& code,
+                       const name& id,
+                       const string& proof,
+                       const string& inputs);
 
-    // token contract
-    ACTION create(const name& issuer, const asset& maximum_supply);
+    // token contract actions
+    ACTION create(const name& issuer,
+                  const asset& maximum_supply);
 
-    ACTION issue(const name& to, const asset& quantity, const string& memo);
+    ACTION issue(const name& to,
+                 const asset& quantity,
+                 const string& memo);
     
-    ACTION retire(const asset& quantity, const string& memo);
+    ACTION retire(const asset& quantity,
+                  const string& memo);
 
     ACTION transfer(const name& from,
                     const name& to,
                     const asset& quantity,
                     const string& memo);
 
-    ACTION open(const name& owner, const symbol& symbol, const name& ram_payer);
+    ACTION open(const name& owner,
+                const symbol& symbol,
+                const name& ram_payer);
 
-    ACTION close(const name& owner, const symbol& symbol);
+    ACTION close(const name& owner,
+                 const symbol& symbol);
 
     inline asset get_supply(const symbol_code& sym) const;
-    inline asset get_balance(const name& owner, const symbol_code& sym) const;
+    
+    inline asset get_balance(const name& owner,
+                             const symbol_code& sym) const;
     
 CONTRACT_END((setvk)(verifyproof)(create)(issue)(retire)(transfer)(open)(close)(xdcommit))
