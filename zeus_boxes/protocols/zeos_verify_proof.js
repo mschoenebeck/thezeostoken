@@ -1,5 +1,7 @@
 var zeos = require('./zeos.js');
 const fetch = require("node-fetch");
+
+// TODO: use '@liquidapps/dapp-client' or '@liquidapps/box-utils'?
 //const { createClient } = require('@liquidapps/dapp-client');
 const { requireBox, getBoxesDir } = require('@liquidapps/box-utils');
 const { createClient } = requireBox("client-lib-base/client/dist/src/dapp-client-lib");

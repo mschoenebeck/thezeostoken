@@ -1,9 +1,8 @@
 #pragma once
 
-// LiquidStorage and LiquidOracle
+// VRAM and LiquidOracle
 #define USE_ADVANCED_IPFS
 #include <eosio/eosio.hpp>
-#include <eosio/singleton.hpp>
 #include "../dappservices/ipfs.hpp"
 #include "../dappservices/multi_index.hpp"
 #include "../dappservices/oracle.hpp"
