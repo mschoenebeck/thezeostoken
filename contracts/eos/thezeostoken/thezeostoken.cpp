@@ -1,9 +1,66 @@
 #include "thezeostoken.hpp"
 
-
 thezeostoken::thezeostoken(name self, name code, datastream<const char *> ds) :
     contract(self, code, ds)
 {
+}
+
+void thezeostoken::setvk(const name& code, const name& id, const string& vk)
+{
+    require_auth(code);
+    
+    vks vk_t(get_self(), code.value);
+    auto c = vk_t.find(id.value);
+    
+    if(c == vk_t.end())
+    {
+        // add new key
+        vk_t.emplace(code, [&](auto& row){
+            row.id = id;
+            row.vk = vk;
+        });
+    }
+    else
+    {
+        // update existing key
+        vk_t.modify(c, code, [&](auto& row){
+            row.vk = vk;
+        });
+    }
+}
+
+void thezeostoken::verifyproof(const name& code, const name& id, const string& proof, const string& inputs)
+{
+    vks vk_t(get_self(), code.value);
+    auto c = vk_t.find(id.value);
+    check(c != vk_t.end(), "id doesn't exist");
+
+    // TODO: is it okay to pack 'proof' and 'inputs' as JSON strings into URI?
+    string str = "zeos_verify_proof://";
+    str.append(code.to_string());
+    str.append("/");
+    str.append(id.to_string());
+    str.append("/");
+    str.append(proof);
+    str.append("/");
+    str.append(inputs);
+
+    bool valid = getURI(vector<char>(str.begin(), str.end()), [&](auto& results) { 
+        uint32_t dsp_threshold = 1;
+        // ensure the specified amount of DSPs have responded before a response is accepted
+        eosio::check(results.size() >= dsp_threshold, "require multiple results for consensus");
+        auto itr = results.begin();
+        auto first = itr->result;
+        ++itr;
+        while(itr != results.end())
+        {
+            eosio::check(itr->result == first, "consensus failed");
+            ++itr;
+        }
+        return first;
+    })[0] == '1';
+    
+    check(valid, "proof invalid");
 }
 
 void thezeostoken::create(const name& issuer, const asset& maximum_supply)

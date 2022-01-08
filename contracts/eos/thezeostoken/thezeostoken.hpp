@@ -1,8 +1,9 @@
 #pragma once
 
+
+// VRAM and LiquidOracle
 #define USE_ADVANCED_IPFS
 #include <eosio/eosio.hpp>
-#include <eosio/singleton.hpp>
 #include "../dappservices/ipfs.hpp"
 #include "../dappservices/multi_index.hpp"
 #include "../dappservices/oracle.hpp"
@@ -24,6 +25,41 @@ using namespace std;
 
 CONTRACT_START()
     
+    // shardbucket table for dapp::multi_index
+    TABLE shardbucket
+    {
+        vector<char> shard_uri;
+        uint64_t shard;
+
+        uint64_t primary_key() const { return shard; }
+    };
+    
+    // This table contains the verifier keys for all circuits [OLD]
+    /*
+    TABLE vk
+    {
+        uint64_t index;
+        string vk_str;
+
+        uint64_t primary_key() const { return index; }
+    };
+    typedef dapp::multi_index<"vks"_n, vk> vks;
+    typedef eosio::multi_index<".vks"_n, vk> vks_t_v_abi;
+    typedef eosio::multi_index<"vks"_n, shardbucket> vks_t_abi;
+    */
+    
+    // This table contains the verifier keys for all circuits [NEW]
+    TABLE verifierkey
+    {
+        name id;
+        string vk;
+
+        uint64_t primary_key() const { return id.value; }
+    };
+    typedef dapp::advanced_multi_index<"verifierkey"_n, verifierkey, uint64_t> vks;
+    typedef eosio::multi_index<".verifierkey"_n, verifierkey> vks_t_v_abi;
+    typedef eosio::multi_index<"verifierkey"_n, shardbucket> vks_t_abi;
+
     TABLE account
     {
         asset balance;
@@ -49,6 +85,13 @@ CONTRACT_START()
 
     thezeostoken(name self, name code, datastream<const char *> ds);
 
+    // set verifier key
+    ACTION setvk(const name& code, const name& id, const string& vk);
+
+    // verify proof
+    ACTION verifyproof(const name& code, const name& id, const string& proof, const string& inputs);
+
+    // token contract
     ACTION create(const name& issuer, const asset& maximum_supply);
 
     ACTION issue(const name& to, const asset& quantity, const string& memo);
@@ -67,4 +110,4 @@ CONTRACT_START()
     inline asset get_supply(const symbol_code& sym) const;
     inline asset get_balance(const name& owner, const symbol_code& sym) const;
     
-CONTRACT_END((create)(issue)(retire)(transfer)(open)(close)(xdcommit))
+CONTRACT_END((setvk)(verifyproof)(create)(issue)(retire)(transfer)(open)(close)(xdcommit))
