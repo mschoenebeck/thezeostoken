@@ -25,17 +25,6 @@ using namespace std;
 
 CONTRACT_START()
     
-    // LiquidStorage Config Table
-    TABLE storagecfg
-    {
-        // all measurements in bytes
-        uint64_t max_file_size_in_bytes = UINT64_MAX; // max file size in bytes that can be uploaded at a time, default 10mb
-        uint64_t global_upload_limit_per_day = UINT64_MAX; // max upload limit in bytes per day for EOS account, default 1 GB
-        uint64_t vaccount_upload_limit_per_day = UINT64_MAX; // max upload limit in bytes per day for LiquidAccounts, default 10 MB
-    };
-    typedef eosio::singleton<"storagecfg"_n, storagecfg> storagecfg_t;
-    
-    
     // shardbucket table for dapp::multi_index
     TABLE shardbucket
     {
@@ -97,16 +86,11 @@ CONTRACT_START()
     // constructor
     thezeostoken(name self, name code, datastream<const char *> ds);
 
-    // SET PARAMS FOR storagecfg TABLE //
-    ACTION setstoragecfg(const uint64_t &max_file_size_in_bytes,
-                         const uint64_t &global_upload_limit_per_day,
-                         const uint64_t &vaccount_upload_limit_per_day);
-
     // set verifier key
-    ACTION setvk(const name& user, const name& id, const string& vk);
+    ACTION setvk(const name& code, const name& id, const string& vk);
 
     // verify proof
-    ACTION verifyproof(const name& id, const string& proof, const string& inputs, const string& payload_uri);
+    ACTION verifyproof(const name& code, const name& id, const string& proof, const string& inputs);
 
     // token contract
     ACTION create(const name& issuer, const asset& maximum_supply);
@@ -114,8 +98,6 @@ CONTRACT_START()
     ACTION issue(const name& to, const asset& quantity, const string& memo);
     
     ACTION retire(const asset& quantity, const string& memo);
-
-    ACTION test(const string& json);
 
     ACTION transfer(const name& from,
                     const name& to,
@@ -127,7 +109,6 @@ CONTRACT_START()
     ACTION close(const name& owner, const symbol& symbol);
 
     inline asset get_supply(const symbol_code& sym) const;
-      
     inline asset get_balance(const name& owner, const symbol_code& sym) const;
     
-CONTRACT_END((setstoragecfg)(setvk)(verifyproof)(create)(issue)(test)(retire)(transfer)(open)(close)(xdcommit))
+CONTRACT_END((setvk)(verifyproof)(create)(issue)(retire)(transfer)(open)(close)(xdcommit))

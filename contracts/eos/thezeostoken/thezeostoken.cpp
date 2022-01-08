@@ -1,43 +1,21 @@
 #include "thezeostoken.hpp"
-#include "liquidstorage_uri.hpp"
-
 
 thezeostoken::thezeostoken(name self, name code, datastream<const char *> ds) :
     contract(self, code, ds)
 {
 }
 
-void thezeostoken::test(const string& json)
+void thezeostoken::setvk(const name& code, const name& id, const string& vk)
 {
-    print(json);
-}
-
-void thezeostoken::setstoragecfg(const uint64_t &max_file_size_in_bytes,
-                                 const uint64_t &global_upload_limit_per_day,
-                                 const uint64_t &vaccount_upload_limit_per_day)
-{
-    require_auth(get_self());
-    storagecfg_t storagecfg_table(get_self(), get_self().value);
-    auto storagecfg = storagecfg_table.get_or_default();
-
-    storagecfg.max_file_size_in_bytes = max_file_size_in_bytes;
-    storagecfg.global_upload_limit_per_day = global_upload_limit_per_day;
-    storagecfg.vaccount_upload_limit_per_day = vaccount_upload_limit_per_day;
-
-    storagecfg_table.set(storagecfg, get_self());
-}
-
-void thezeostoken::setvk(const name& user, const name& id, const string& vk)
-{
-    require_auth(user);
+    require_auth(code);
     
-    vks vk_t(get_self(), user.value);
+    vks vk_t(get_self(), code.value);
     auto c = vk_t.find(id.value);
     
     if(c == vk_t.end())
     {
         // add new key
-        vk_t.emplace(user, [&](auto& row){
+        vk_t.emplace(code, [&](auto& row){
             row.id = id;
             row.vk = vk;
         });
@@ -45,30 +23,26 @@ void thezeostoken::setvk(const name& user, const name& id, const string& vk)
     else
     {
         // update existing key
-        vk_t.modify(c, user, [&](auto& row){
+        vk_t.modify(c, code, [&](auto& row){
             row.vk = vk;
         });
     }
 }
 
-void thezeostoken::verifyproof(const name& id, const string& proof, const string& inputs, const string& payload_uri)
+void thezeostoken::verifyproof(const name& code, const name& id, const string& proof, const string& inputs)
 {
-    vks vk_t(get_self(), get_self().value);
+    vks vk_t(get_self(), code.value);
     auto c = vk_t.find(id.value);
     check(c != vk_t.end(), "id doesn't exist");
 
-    string data = c->vk;
-    data.append("/");
-    data.append(proof);
-    data.append("/");
-    data.append(inputs);
-    
-    string uri = get_liquidstorage_uri(data);
-
-    check(0 == uri.compare(payload_uri), "payload_uri invalid");
-
     string str = "zeos_verify_proof://";
-    str.append(uri.substr(7)); // cut off "ipfs://" and append to str
+    str.append(code.to_string());
+    str.append("/");
+    str.append(id.to_string());
+    str.append("/");
+    str.append(proof);
+    str.append("/");
+    str.append(inputs);
     vector<char> uri_vec(str.begin(), str.end());
 
     bool valid = getURI(uri_vec, [&](auto& results) { 
