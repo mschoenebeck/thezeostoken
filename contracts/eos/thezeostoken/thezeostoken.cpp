@@ -22,10 +22,18 @@ void thezeostoken::setvk(const name& code, const name& id, const string& vk)
     }
     else
     {
-        // update existing key
-        vk_t.modify(c, code, [&](auto& row){
-            row.vk = vk;
-        });
+        if(vk.empty())
+        {
+            // erase existing key to free up RAM
+            vk_t.erase(c);
+        }
+        else
+        {
+            // update existing key
+            vk_t.modify(c, code, [&](auto& row){
+                row.vk = vk;
+            });
+        }
     }
 }
 
