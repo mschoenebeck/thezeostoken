@@ -43,7 +43,7 @@ void thezeostoken::verifyproof(const name& code, const name& id, const string& p
     auto c = vk_t.find(id.value);
     check(c != vk_t.end(), "id doesn't exist");
 
-    // TODO: is it okay to pack 'proof' and 'inputs' as JSON strings into URI?
+    // TODO: is it okay to pack 'proof' and 'inputs' as JSON strings into URI? It seems to work here...
     string str = "zeos_verify_proof://";
     str.append(code.to_string());
     str.append("/");
@@ -53,22 +53,25 @@ void thezeostoken::verifyproof(const name& code, const name& id, const string& p
     str.append("/");
     str.append(inputs);
 
+    //uint32_t dsp_count = 0;
     bool valid = getURI(vector<char>(str.begin(), str.end()), [&](auto& results) { 
         uint32_t dsp_threshold = 1;
         // ensure the specified amount of DSPs have responded before a response is accepted
         check(results.size() >= dsp_threshold, "require multiple results for consensus");
+        //dsp_count = results.size();
         auto itr = results.begin();
         auto first = itr->result;
         ++itr;
         while(itr != results.end())
         {
-            eosio::check(itr->result == first, "consensus failed");
+            check(itr->result == first, "consensus failed");
             ++itr;
         }
         return first;
     })[0] == '1';
     
     check(valid, "proof invalid");
+    //print("Proof verified by ", dsp_count, " DSPs\n\r");
 }
 
 void thezeostoken::create(const name& issuer, const asset& maximum_supply)
