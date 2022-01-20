@@ -45,6 +45,44 @@ CONTRACT_START()
     typedef eosio::multi_index<".verifierkey"_n, verifierkey> vks_t_v_abi;
     typedef eosio::multi_index<"verifierkey"_n, shardbucket> vks_t_abi;
 
+    // zeos private transaction data table
+    TABLE txdata
+    {
+        uint128_t id;                   // tx counter: auto increment
+        checksum256 epk_s;              // [u8; 32]
+        vector<uint8_t> ciphertext_s;   // Vec<u8>,
+        checksum256 epk_r;              // [u8; 32]
+        vector<uint8_t> ciphertext_r;   // Vec<u8>
+
+        uint128_t primary_key() const { return id; }
+    };
+    typedef dapp::advanced_multi_index<"txdata"_n, txdata, uint128_t> txd;
+    typedef eosio::multi_index<".txdata"_n, txdata> txd_t_v_abi;
+    typedef eosio::multi_index<"txdata"_n, shardbucket> txd_t_abi;
+
+    // zeos note commitments merkle tree table
+    TABLE mtree
+    {
+        uint128_t id;
+        checksum256 val;
+
+        uint128_t primary_key() const { return id; }
+    };
+    typedef dapp::advanced_multi_index<"mtree"_n, mtree, uint128_t> mt;
+    typedef eosio::multi_index<".mtree"_n, mtree> mt_t_v_abi;
+    typedef eosio::multi_index<"mtree"_n, shardbucket> mt_t_abi;
+
+    // zeos nullifier table
+    TABLE nullifier
+    {
+        checksum256 val;
+
+        checksum256 primary_key() const { return val; }
+    };
+    typedef dapp::advanced_multi_index<"nullifier"_n, nullifier, checksum256> nf;
+    typedef eosio::multi_index<".nullifier"_n, nullifier> nf_t_v_abi;
+    typedef eosio::multi_index<"nullifier"_n, shardbucket> nf_t_abi;
+
     // token contract tables
     TABLE account
     {
