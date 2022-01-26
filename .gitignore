@@ -1,5 +1,6 @@
-# mschoenebeck: added logs folder
+# mschoenebeck: added logs and .vscode folder
 logs/
+.vscode/
 zeus_boxes/
 **/node_modules/
 **/dist/
