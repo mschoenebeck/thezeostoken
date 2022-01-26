@@ -46,19 +46,21 @@ CONTRACT_START()
     typedef eosio::multi_index<"verifierkey"_n, shardbucket> vks_t_abi;
 
     // zeos private transaction data table
-    TABLE txdata
+    TABLE tx
     {
-        uint128_t id;                   // tx counter: auto increment
-        checksum256 epk_s;              // [u8; 32]
-        vector<uint8_t> ciphertext_s;   // Vec<u8>,
-        checksum256 epk_r;              // [u8; 32]
-        vector<uint8_t> ciphertext_r;   // Vec<u8>
-
+        uint128_t id;   // tx counter: auto increment
+        struct data     // the actual encrypted tx data
+        {
+            checksum256 epk_s;              // [u8; 32]
+            vector<uint8_t> ciphertext_s;   // Vec<u8>,
+            checksum256 epk_r;              // [u8; 32]
+            vector<uint8_t> ciphertext_r;   // Vec<u8>
+        };
         uint128_t primary_key() const { return id; }
     };
-    typedef dapp::advanced_multi_index<"txdata"_n, txdata, uint128_t> txd;
-    typedef eosio::multi_index<".txdata"_n, txdata> txd_t_v_abi;
-    typedef eosio::multi_index<"txdata"_n, shardbucket> txd_t_abi;
+    typedef dapp::advanced_multi_index<"tx"_n, tx, uint128_t> txd;
+    typedef eosio::multi_index<".tx"_n, tx> txd_t_v_abi;
+    typedef eosio::multi_index<"tx"_n, shardbucket> txd_t_abi;
 
     // zeos note commitments merkle tree table
     TABLE mtree
@@ -125,6 +127,21 @@ CONTRACT_START()
                        const name& id,
                        const string& proof,
                        const string& inputs);
+
+    // zMint
+    ACTION zmint(const struct tx::data& data,
+                 const string& proof,
+                 const string& inputs);
+
+    // zTransfer
+    ACTION ztransfer(const struct tx::data& data,
+                     const string& proof,
+                     const string& inputs);
+
+    // zBurn
+    ACTION zburn(const struct tx::data& data,
+                 const string& proof,
+                 const string& inputs);
 
     // token contract actions
     ACTION create(const name& issuer,
