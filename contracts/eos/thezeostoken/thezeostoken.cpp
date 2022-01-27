@@ -74,6 +74,69 @@ void thezeostoken::verifyproof(const name& code, const name& id, const string& p
     //print("Proof verified by ", dsp_count, " DSPs\n\r");
 }
 
+// zMint
+void thezeostoken::zmint(const checksum256& epk_s,
+                         const vector<uint8_t>& ciphertext_s,
+                         const checksum256& epk_r,
+                         const vector<uint8_t>& ciphertext_r,
+                         const string& proof,
+                         const string& inputs,
+                         const asset& a,
+                         const checksum256& z_a,
+                         const name& user)
+{
+    require_auth(user);
+
+    // pack inputs
+    // verify proof
+    // burn a from user's balance
+    // add z_a to tree
+    // add tx data
+}
+
+// zTransfer
+void thezeostoken::ztransfer(const checksum256& epk_s,
+                             const vector<uint8_t>& ciphertext_s,
+                             const checksum256& epk_r,
+                             const vector<uint8_t>& ciphertext_r,
+                             const string& proof,
+                             const string& inputs,
+                             const checksum256& nf_a,
+                             const checksum256& z_b,
+                             const checksum256& z_c,
+                             const checksum256& root)
+{
+    // pack inputs
+    // verify proof
+    // add nf
+    // add z_b and z_c to tree
+    // add tx data
+}
+
+// zBurn
+void thezeostoken::zburn(const checksum256& epk_s,
+                         const vector<uint8_t>& ciphertext_s,
+                         const checksum256& epk_r,
+                         const vector<uint8_t>& ciphertext_r,
+                         const string& proof,
+                         const string& inputs,
+                         const checksum256& nf_a,
+                         const asset& b,
+                         const checksum256& z_c,
+                         const checksum256& root,
+                         const name& user)
+{
+    // NOTE: uncomment if users should only be able to withdraw to their own EOS account, not to someone else's
+    //require_auth(user);
+
+    // pack inputs
+    // verify proof
+    // mint b to user's balance
+    // add nf
+    // add z_c to tree
+    // add tx data
+}
+
 void thezeostoken::create(const name& issuer, const asset& maximum_supply)
 {
     require_auth(_self);

@@ -125,7 +125,7 @@ CONTRACT_START()
     // verify proof
     ACTION verifyproof(const name& code,
                        const name& id,
-                       const string& proof,
+                       const string& proof,     
                        const string& inputs);
 
     // zMint
@@ -134,7 +134,10 @@ CONTRACT_START()
                  const checksum256& epk_r,
                  const vector<uint8_t>& ciphertext_r,
                  const string& proof,
-                 const string& inputs);
+                 const string& inputs,
+                 const asset& a,
+                 const checksum256& z_a,
+                 const name& user);
 
     // zTransfer
     ACTION ztransfer(const checksum256& epk_s,
@@ -142,7 +145,11 @@ CONTRACT_START()
                      const checksum256& epk_r,
                      const vector<uint8_t>& ciphertext_r,
                      const string& proof,
-                     const string& inputs);
+                     const string& inputs,
+                     const checksum256& nf_a,
+                     const checksum256& z_b,
+                     const checksum256& z_c,
+                     const checksum256& root);
 
     // zBurn
     ACTION zburn(const checksum256& epk_s,
@@ -150,7 +157,12 @@ CONTRACT_START()
                  const checksum256& epk_r,
                  const vector<uint8_t>& ciphertext_r,
                  const string& proof,
-                 const string& inputs);
+                 const string& inputs,
+                 const checksum256& nf_a,
+                 const asset& b,
+                 const checksum256& z_c,
+                 const checksum256& root,
+                 const name& user);
 
     // token contract actions
     ACTION create(const name& issuer,
