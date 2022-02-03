@@ -1,6 +1,9 @@
 #pragma once
 
 #include <vector>
+#include <tuple>
+#include <array>
+#include <eosio/eosio.hpp>
 
 using namespace std;
 
@@ -134,6 +137,18 @@ void append_bits(vector<bool>& bits, const uint64_t& val)
     for(int i = 0; i < 64; i++)
     {
         bits.push_back((val>>i & 1) == 1);
+    }
+}
+
+void append_bits(vector<bool>& bits, const checksum256& val)
+{
+    array<uint8_t, 32> arr = val.extract_as_byte_array();
+    for(int i = 0; i < 32; i++)
+    {
+        for(int j = 0; j < 8; j++)
+        {
+            bits.push_back((arr[i]>>j & 1) == 1);
+        }
     }
 }
 
