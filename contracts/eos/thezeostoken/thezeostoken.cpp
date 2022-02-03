@@ -88,13 +88,32 @@ void thezeostoken::zmint(const checksum256& epk_s,
     require_auth(user);
     check(a.amount >= 0, "a.amount invalid");
 
-    // pack inputs [[amt_a, sym_a, z_a_0, z_a_1], [z_a_2, z_a_3, 0, 0]]
-    
+    // pack inputs in order: amt_a, sym_a, z_a
+    vector<bool> bits;
+    append_bits(bits, a.amount);
+    append_bits(bits, a.symbol.raw());
+    append_bits(bits, z_a);
+    string inputs = inputs_json(compute_multipacking(bits));
 
     // verify proof
+    verifyproof(_self, "zeosmintnote"_n, proof, inputs);
+
     // burn a from user's balance
+    sub_balance(user, a);
+
     // add z_a to tree
+#ifdef USE_VRAM
+    // TODO
+#else
+    
+#endif
+
     // add tx data
+#ifdef USE_VRAM
+    // TODO
+#else
+    
+#endif
 }
 
 // zTransfer
