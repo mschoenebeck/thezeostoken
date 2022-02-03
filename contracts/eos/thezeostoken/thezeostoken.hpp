@@ -6,6 +6,7 @@
 #include "../dappservices/ipfs.hpp"
 #include "../dappservices/multi_index.hpp"
 #include "../dappservices/oracle.hpp"
+#include "zeos.hpp"
 
 using namespace eosio;
 using namespace std;
@@ -134,7 +135,7 @@ CONTRACT_START()
                  const checksum256& epk_r,
                  const vector<uint8_t>& ciphertext_r,
                  const string& proof,
-                 const string& inputs,
+                 //const string& inputs,
                  const asset& a,
                  const checksum256& z_a,
                  const name& user);
@@ -145,7 +146,7 @@ CONTRACT_START()
                      const checksum256& epk_r,
                      const vector<uint8_t>& ciphertext_r,
                      const string& proof,
-                     const string& inputs,
+                     //const string& inputs,
                      const checksum256& nf_a,
                      const checksum256& z_b,
                      const checksum256& z_c,
@@ -157,7 +158,7 @@ CONTRACT_START()
                  const checksum256& epk_r,
                  const vector<uint8_t>& ciphertext_r,
                  const string& proof,
-                 const string& inputs,
+                 //const string& inputs,
                  const checksum256& nf_a,
                  const asset& b,
                  const checksum256& z_c,

@@ -80,14 +80,17 @@ void thezeostoken::zmint(const checksum256& epk_s,
                          const checksum256& epk_r,
                          const vector<uint8_t>& ciphertext_r,
                          const string& proof,
-                         const string& inputs,
+                         //const string& inputs,
                          const asset& a,
                          const checksum256& z_a,
                          const name& user)
 {
     require_auth(user);
+    check(a.amount >= 0, "a.amount invalid");
 
-    // pack inputs
+    // pack inputs [[amt_a, sym_a, z_a_0, z_a_1], [z_a_2, z_a_3, 0, 0]]
+    
+
     // verify proof
     // burn a from user's balance
     // add z_a to tree
@@ -100,7 +103,7 @@ void thezeostoken::ztransfer(const checksum256& epk_s,
                              const checksum256& epk_r,
                              const vector<uint8_t>& ciphertext_r,
                              const string& proof,
-                             const string& inputs,
+                             //const string& inputs,
                              const checksum256& nf_a,
                              const checksum256& z_b,
                              const checksum256& z_c,
@@ -119,7 +122,7 @@ void thezeostoken::zburn(const checksum256& epk_s,
                          const checksum256& epk_r,
                          const vector<uint8_t>& ciphertext_r,
                          const string& proof,
-                         const string& inputs,
+                         //const string& inputs,
                          const checksum256& nf_a,
                          const asset& b,
                          const checksum256& z_c,
