@@ -322,14 +322,18 @@ asset thezeostoken::get_balance(const name& owner, const symbol_code& sym) const
     return ac.balance;
 }
 
-// merkle tree:
-//        ()        
-//      /    \
-//    ()      ()    
-//   /  \    /  \
-//  []  []  []  []  
-//  l_0 l_1 ... l_2^max
+// merkle tree structure:
+// 
+//              (0)                 [d = 0] (root)
+//         /            \
+//       (1)            (2)         [d = 1]
+//     /    \        /      \
+//   (3)    (4)    (5)      (6)     [d = 2]
+//   / \    / \    /  \    /  \
+// (7) (8)(9)(10)(11)(12)(13)(14)   [d = 3]
+//
 #define MT_ARR_OFFSET(d) ((1<<(d)) - 1)
+#define MTS_ROOTS_FIFO_SIZE 32
 void thezeostoken::insert_into_merkle_tree(const checksum256& val)
 {
     // fetch merkle tree state
@@ -395,6 +399,11 @@ void thezeostoken::insert_into_merkle_tree(const checksum256& val)
     // update tree state: increment leaf index, add new root val to FIFO
     mts.modify(state, _self, [&](auto& row) {
         row.leaf_index++;
-        row.roots.push_back(tree.get(0).val);
+        row.roots.push_front(tree.get(0).val);
+        // only memorize the most recent x number of root nodes
+        if(row.roots.size() > MTS_ROOTS_FIFO_SIZE)
+        {
+            row.roots.pop_back();
+        }
     });
 }
