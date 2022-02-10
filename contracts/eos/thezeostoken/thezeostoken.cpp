@@ -329,20 +329,22 @@ asset thezeostoken::get_balance(const name& owner, const symbol_code& sym) const
 //   /  \    /  \
 //  []  []  []  []  
 //  l_0 l_1 ... l_2^max
-#define MT_ARR_OFFSET(d) (1<<(d) - 1)
+#define MT_ARR_OFFSET(d) ((1<<(d)) - 1)
 void thezeostoken::insert_into_merkle_tree(const checksum256& val)
 {
     // fetch merkle tree state
     mtstate mts(_self, _self.value);
 #ifdef USE_VRAM
     auto state = mts.find(0);
+    typedef uint128_t idx_t;
 #else
     auto state = mts.find(1);
+    typedef uint64_t idx_t;
 #endif
     check(state != mts.end(), "merkle tree state table not initialized");
 
     // calculate array index of next free leaf
-    uint64_t idx = MT_ARR_OFFSET(state->depth) + state->leaf_index;
+    idx_t idx = MT_ARR_OFFSET(state->depth) + state->leaf_index;
 
     // insert val into leaf
     mt tree(_self, _self.value);
@@ -358,7 +360,7 @@ void thezeostoken::insert_into_merkle_tree(const checksum256& val)
         bool is_left_child = 1 == idx % 2;
 
         // determine sister node
-        uint64_t sis_idx = is_left_child ? idx + 1 : idx - 1;
+        idx_t sis_idx = is_left_child ? idx + 1 : idx - 1;
 
         // get values of both nodes
         checksum256 l = is_left_child ? tree.get(idx).val : tree.get(sis_idx).val;  //   (idx)     (0)
