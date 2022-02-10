@@ -106,7 +106,6 @@ CONTRACT_START()
     };
     typedef eosio::multi_index<"mteosram"_n, merkle_tree> mt;
 #endif
-    const static uint64_t MT_ARR_OFFSET[];
 
 #ifdef USE_VRAM
     // zeos nullifier table

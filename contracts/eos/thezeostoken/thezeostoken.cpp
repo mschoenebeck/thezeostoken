@@ -322,41 +322,6 @@ asset thezeostoken::get_balance(const name& owner, const symbol_code& sym) const
     return ac.balance;
 }
 
-const uint64_t thezeostoken::MT_ARR_OFFSET[] = {
-    0,
-    1,
-    3,
-    7,
-    15,
-    31,
-    63,
-    127,
-    255,
-    511,
-    1023,
-    2047,
-    4095,
-    8191,
-    16383,
-    32767,
-    65535,
-    131071,
-    262143,
-    524287,
-    1048575,
-    2097151,
-    4194303,
-    8388607,
-    16777215,
-    33554431,
-    67108863,
-    134217727,
-    268435455,
-    536870911,
-    1073741823,
-    2147483647
-};
-
 // merkle tree:
 //        ()        
 //      /    \
@@ -364,6 +329,7 @@ const uint64_t thezeostoken::MT_ARR_OFFSET[] = {
 //   /  \    /  \
 //  []  []  []  []  
 //  l_0 l_1 ... l_2^max
+#define MT_ARR_OFFSET(d) (1<<(d) - 1)
 void thezeostoken::insert_into_merkle_tree(const checksum256& val)
 {
     // fetch merkle tree state
@@ -376,7 +342,7 @@ void thezeostoken::insert_into_merkle_tree(const checksum256& val)
     check(state != mts.end(), "merkle tree state table not initialized");
 
     // calculate array index of next free leaf
-    uint64_t idx = MT_ARR_OFFSET[state->depth] + state->leaf_index;
+    uint64_t idx = MT_ARR_OFFSET(state->depth) + state->leaf_index;
 
     // insert val into leaf
     mt tree(_self, _self.value);
@@ -424,5 +390,5 @@ void thezeostoken::insert_into_merkle_tree(const checksum256& val)
         }
     }
 
-    // increment leaf index
+    // update tree state: increment leaf index, add new root val to FIFO
 }
