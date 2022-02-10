@@ -389,6 +389,10 @@ void thezeostoken::insert_into_merkle_tree(const checksum256& val)
             });
         }
     }
-
+    
     // update tree state: increment leaf index, add new root val to FIFO
+    mts.modify(state, _self, [&](auto& row) {
+        row.leaf_index++;
+        row.roots.push_back(tree.get(0).val);
+    });
 }
