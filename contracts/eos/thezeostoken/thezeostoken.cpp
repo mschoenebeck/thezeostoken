@@ -102,11 +102,7 @@ void thezeostoken::zmint(const checksum256& epk_s,
     sub_balance(user, a);
 
     // add z_a to tree
-#ifdef USE_VRAM
-    // TODO
-#else
-    
-#endif
+    insert_into_merkle_tree(z_a);
 
     // add tx data
 #ifdef USE_VRAM
@@ -324,4 +320,109 @@ asset thezeostoken::get_balance(const name& owner, const symbol_code& sym) const
     accounts accountstable(_self, owner.value);
     const auto& ac = accountstable.get(sym.raw());
     return ac.balance;
+}
+
+const uint64_t thezeostoken::MT_ARR_OFFSET[] = {
+    0,
+    1,
+    3,
+    7,
+    15,
+    31,
+    63,
+    127,
+    255,
+    511,
+    1023,
+    2047,
+    4095,
+    8191,
+    16383,
+    32767,
+    65535,
+    131071,
+    262143,
+    524287,
+    1048575,
+    2097151,
+    4194303,
+    8388607,
+    16777215,
+    33554431,
+    67108863,
+    134217727,
+    268435455,
+    536870911,
+    1073741823,
+    2147483647
+};
+
+// merkle tree:
+//        ()        
+//      /    \
+//    ()      ()    
+//   /  \    /  \
+//  []  []  []  []  
+//  l_0 l_1 ... l_2^max
+void thezeostoken::insert_into_merkle_tree(const checksum256& val)
+{
+    // fetch merkle tree state
+    mtstate mts(_self, _self.value);
+#ifdef USE_VRAM
+    auto state = mts.find(0);
+#else
+    auto state = mts.find(1);
+#endif
+    check(state != mts.end(), "merkle tree state table not initialized");
+
+    // calculate array index of next free leaf
+    uint64_t idx = MT_ARR_OFFSET[state->depth] + state->leaf_index;
+
+    // insert val into leaf
+    mt tree(_self, _self.value);
+    tree.emplace(_self, [&](auto& leaf) {
+        leaf.idx = idx;
+        leaf.val = val;
+    });
+
+    // calculate merkle path up to root
+    for(int d = state->depth; d > 0; d--)
+    {
+        // if array index of node is uneven it is always the left child
+        bool is_left_child = 1 == idx % 2;
+
+        // determine sister node
+        uint64_t sis_idx = is_left_child ? idx + 1 : idx - 1;
+
+        // get values of both nodes
+        checksum256 l = is_left_child ? tree.get(idx).val : tree.get(sis_idx).val;  //   (idx)     (0)
+        checksum256 r = is_left_child ? checksum256() /* =0 */ : tree.get(idx).val; // (sis_idx)  (idx)
+
+        // concatenate and digest
+        // TODO
+        checksum256 parent_val = checksum256();
+
+        // set idx to parent node index:
+        // left child's array index divided by two (integer division) equals array index of parent node
+        idx = is_left_child ? idx / 2 : sis_idx / 2;
+
+        // check if parent node was already created
+        auto it = tree.find(idx);
+        // write new parent
+        if(it == tree.end())
+        {
+            tree.emplace(_self, [&](auto& node) {
+                node.idx = idx;
+                node.val = parent_val;
+            });
+        }
+        else
+        {
+            tree.modify(it, _self, [&](auto& node) {
+                node.val = parent_val;
+            });
+        }
+    }
+
+    // increment leaf index
 }

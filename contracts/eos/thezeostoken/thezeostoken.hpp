@@ -3,13 +3,6 @@
 // comment out to use EOS RAM for merkle tree, tx data and nullifier tables, uncomment to use VRAM
 //#define USE_VRAM
 
-// determine merkle tree stats table index for global mt status data
-#ifdef USE_VRAM
-#define MT_IDX 0
-#else
-#define MT_IDX 1
-#endif
-
 // VRAM and LiquidOracle includes
 #define USE_ADVANCED_IPFS
 #include <eosio/eosio.hpp>
@@ -94,7 +87,7 @@ CONTRACT_START()
     // zeos note commitments merkle tree table
     TABLE merkle_tree
     {
-        uint128_t id;
+        uint128_t idx;
         checksum256 val;
 
         uint128_t primary_key() const { return id; }
@@ -106,13 +99,14 @@ CONTRACT_START()
     // zeos note commitments merkle tree table
     TABLE merkle_tree
     {
-        uint64_t id;        // uint64_t on EOS RAM
+        uint64_t idx;       // uint64_t on EOS RAM
         checksum256 val;
 
-        uint64_t primary_key() const { return id; }
+        uint64_t primary_key() const { return idx; }
     };
     typedef eosio::multi_index<"mteosram"_n, merkle_tree> mt;
 #endif
+    const static uint64_t MT_ARR_OFFSET[];
 
 #ifdef USE_VRAM
     // zeos nullifier table
@@ -137,16 +131,17 @@ CONTRACT_START()
     typedef eosio::multi_index<"nfeosram"_n, nullifier> nf;
 #endif
 
-    TABLE merkle_tree_status
+    TABLE merkle_tree_state
     {
-        uint64_t index; // = 0 for vram, = 1 for eos ram
-        uint64_t tree_index;
-        uint128_t leaf_index;
-        vector<checksum256> roots;
+        uint64_t index;             // = 0 for vram, = 1 for eos ram
+        uint64_t tree_index;        // current tree
+        uint128_t leaf_index;       // next empty leaf
+        uint64_t depth;             // depth of the tree
+        deque<checksum256> roots;   // stores the most recent roots defined by MTS_NUM_ROOTS. the current root is always the last element
 
         uint64_t primary_key() const { return index; }
     };
-    typedef eosio::multi_index<"mtstat"_n, merkle_tree_status> mtstat;
+    typedef eosio::multi_index<"mtstate"_n, merkle_tree_state> mtstate;
 
     // token contract tables
     TABLE account
@@ -173,6 +168,8 @@ CONTRACT_START()
     void add_balance(const name& owner,
                      const asset& value,
                      const name& ram_payer);
+    
+    void insert_into_merkle_tree(const checksum256& val);
 
     public:
 
