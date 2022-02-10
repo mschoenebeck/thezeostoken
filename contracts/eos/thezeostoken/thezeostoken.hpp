@@ -10,6 +10,7 @@
 #include "../dappservices/multi_index.hpp"
 #include "../dappservices/oracle.hpp"
 #include "zeos.hpp"
+#include "blake2s.h"
 
 using namespace eosio;
 using namespace std;

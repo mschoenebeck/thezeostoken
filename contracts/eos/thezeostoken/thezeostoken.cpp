@@ -371,8 +371,13 @@ void thezeostoken::insert_into_merkle_tree(const checksum256& val)
         checksum256 r = is_left_child ? checksum256() /* =0 */ : tree.get(idx).val; // (sis_idx)  (idx)
 
         // concatenate and digest
-        // TODO
-        checksum256 parent_val = checksum256();
+        uint8_t digest[32];
+        Blake2sContext context;
+        blake2sInit(&context, NULL, 0, 32);
+        blake2sUpdate(&context, l.extract_as_byte_array().data(), 32);
+        blake2sUpdate(&context, r.extract_as_byte_array().data(), 32);
+        blake2sFinal(&context, digest);
+        checksum256 parent_val = checksum256(digest);
 
         // set idx to parent node index:
         // left child's array index divided by two (integer division) equals array index of parent node
