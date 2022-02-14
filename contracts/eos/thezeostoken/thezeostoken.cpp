@@ -74,12 +74,48 @@ void thezeostoken::verifyproof(const name& code, const name& id, const string& p
     //print("Proof verified by ", dsp_count, " DSPs\n\r");
 }
 
-void thezeostoken::zinit(const uint64_t& index,
-                         const uint64_t& depth)
+void thezeostoken::zinit(const uint64_t& depth)
 {
-    // empty all tables
+    require_auth(_self);
+
+    // empty all tables (txd, mt, nf)
+    txd_t txd(_self, _self.value);
+    for(auto it = txd.begin(); it != txd.end(); )
+        it = txd.erase(it);
+    mt_t mt(_self, _self.value);
+    for(auto it = mt.begin(); it != mt.end(); )
+        it = mt.erase(it);
+    nf_t nf(_self, _self.value);
+    for(auto it = nf.begin(); it != nf.end(); )
+        it = nf.erase(it);
 
     // reset indices in merkle tree state table
+    mts_t mts(_self, _self.value);
+#ifdef USE_VRAM
+    const uint64_t idx = 0;
+#else
+    const uint64_t idx = 1;
+#endif
+    auto state = mts.find(idx);
+    if(state == mts.end())
+    {
+        mts.emplace(_self, [&](auto& row){
+            row.idx = idx;
+            row.tree_idx = 0;
+            row.leaf_idx = 0;
+            row.depth = depth;
+            row.roots = deque<checksum256>();
+        });
+    }
+    else
+    {
+        mts.modify(state, _self, [&](auto& row){
+            row.tree_idx = 0;
+            row.leaf_idx = 0;
+            row.depth = depth;
+            row.roots = deque<checksum256>();
+        });
+    }
 }
 
 // zMint

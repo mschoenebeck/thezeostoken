@@ -189,8 +189,7 @@ CONTRACT_START()
                        const string& inputs);
 
     // zinit
-    ACTION zinit(const uint64_t& index,
-                 const uint64_t& depth);
+    ACTION zinit(const uint64_t& depth);
 
     // zMint
     ACTION zmint(const checksum256& epk_s,
