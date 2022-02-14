@@ -88,7 +88,7 @@ void thezeostoken::zmint(const checksum256& epk_s,
     require_auth(user);
     check(a.amount >= 0, "a.amount invalid");
 
-    // pack inputs in order: amt_a, sym_a, z_a
+    // pack inputs in same order as in the arithmetic circuit: amt_a, sym_a, z_a
     vector<bool> bits;
     append_bits(bits, a.amount);
     append_bits(bits, a.symbol.raw());
@@ -108,7 +108,7 @@ void thezeostoken::zmint(const checksum256& epk_s,
 #ifdef USE_VRAM
     // TODO
 #else
-    
+    // TODO
 #endif
 }
 
@@ -124,11 +124,59 @@ void thezeostoken::ztransfer(const checksum256& epk_s,
                              const checksum256& z_c,
                              const checksum256& root)
 {
-    // pack inputs
+    // pack inputs in same order as in the arithmetic circuit: nf_a, z_b, z_c, root
+    vector<bool> bits;
+    append_bits(bits, nf_a);
+    append_bits(bits, z_b);
+    append_bits(bits, z_c);
+    append_bits(bits, root);
+    string inputs = inputs_json(compute_multipacking(bits));
+
     // verify proof
-    // add nf
+    verifyproof(_self, "zeostransfer"_n, proof, inputs);
+
+    // check if nullifier already exists in list, if not add it
+    nf _nf(_self, _self.value);
+#ifdef USE_VRAM
+    auto it =_nf.find(nf_a);
+#else
+    auto it =_nf.find(*((uint64_t*)nf_a.extract_as_byte_array().data()));
+#endif
+    check(it == _nf.end(), "nullifier exists => note has been spent already");
+    _nf.emplace(_self, [&](auto& n) {
+        n.val = nf_a;
+    });
+
+    // check if root is valid
+    mtstate mts(_self, _self.value);
+#ifdef USE_VRAM
+    auto state = mts.find(0);
+#else
+    auto state = mts.find(1);
+#endif
+    check(state != mts.end(), "merkle tree state table not initialized");
+    auto r = state->roots.begin();
+    while(r != state->roots.end())
+    {
+        if(*r == root)
+        {
+            break;
+        }
+        r++;
+    }
+    check(r != state->roots.end(), "root invalid");
+    // TODO: check roots of previous, full merkle trees (tree_index > 0) in addition to the deque
+
     // add z_b and z_c to tree
+    insert_into_merkle_tree(z_b);
+    insert_into_merkle_tree(z_c);
+
     // add tx data
+#ifdef USE_VRAM
+    // TODO
+#else
+    // TODO
+#endif
 }
 
 // zBurn
@@ -147,12 +195,62 @@ void thezeostoken::zburn(const checksum256& epk_s,
     // NOTE: uncomment if users should only be able to withdraw to their own EOS account, not to someone else's
     //require_auth(user);
 
-    // pack inputs
+    // pack inputs in same order as in the arithmetic circuit: nf_a, amt_b, sym_b, z_c, root
+    vector<bool> bits;
+    append_bits(bits, nf_a);
+    append_bits(bits, b.amount);
+    append_bits(bits, b.symbol.raw());
+    append_bits(bits, z_c);
+    append_bits(bits, root);
+    string inputs = inputs_json(compute_multipacking(bits));
+
     // verify proof
-    // mint b to user's balance
-    // add nf
+    verifyproof(_self, "zeosburnnote"_n, proof, inputs);
+
+    // check if nullifier already exists in list, if not add it
+    nf _nf(_self, _self.value);
+#ifdef USE_VRAM
+    auto it =_nf.find(nf_a);
+#else
+    auto it =_nf.find(*((uint64_t*)nf_a.extract_as_byte_array().data()));
+#endif
+    check(it == _nf.end(), "nullifier exists => note has been spent already");
+    _nf.emplace(_self, [&](auto& n) {
+        n.val = nf_a;
+    });
+
+    // check if root is valid
+    mtstate mts(_self, _self.value);
+#ifdef USE_VRAM
+    auto state = mts.find(0);
+#else
+    auto state = mts.find(1);
+#endif
+    check(state != mts.end(), "merkle tree state table not initialized");
+    auto r = state->roots.begin();
+    while(r != state->roots.end())
+    {
+        if(*r == root)
+        {
+            break;
+        }
+        r++;
+    }
+    check(r != state->roots.end(), "root invalid");
+    // TODO: check roots of previous, full merkle trees (tree_index > 0) in addition to the deque
+
     // add z_c to tree
+    insert_into_merkle_tree(z_c);
+
+    // mint b to user's balance
+    add_balance(user, b, user);
+
     // add tx data
+#ifdef USE_VRAM
+    // TODO
+#else
+    // TODO
+#endif
 }
 
 void thezeostoken::create(const name& issuer, const asset& maximum_supply)
@@ -401,7 +499,7 @@ void thezeostoken::insert_into_merkle_tree(const checksum256& val)
         }
     }
     
-    // update tree state: increment leaf index, add new root val to FIFO
+    // update tree state: increment leaf index, add new root to FIFO
     mts.modify(state, _self, [&](auto& row) {
         row.leaf_index++;
         row.roots.push_front(tree.get(0).val);
