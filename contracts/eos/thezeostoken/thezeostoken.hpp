@@ -46,7 +46,7 @@ CONTRACT_START()
 
         uint64_t primary_key() const { return id.value; }
     };
-    typedef dapp::advanced_multi_index<"verifierkey"_n, verifierkey, uint64_t> vks;
+    typedef dapp::advanced_multi_index<"verifierkey"_n, verifierkey, uint64_t> vks_t;
     typedef eosio::multi_index<".verifierkey"_n, verifierkey> vks_t_v_abi;
     typedef eosio::multi_index<"verifierkey"_n, shardbucket> vks_t_abi;
 
@@ -64,7 +64,7 @@ CONTRACT_START()
         
         uint128_t primary_key() const { return id; }
     };
-    typedef dapp::advanced_multi_index<"txd"_n, transaction_data, uint128_t> txd;
+    typedef dapp::advanced_multi_index<"txd"_n, transaction_data, uint128_t> txd_t;
     typedef eosio::multi_index<".txd"_n, transaction_data> txd_t_v_abi;
     typedef eosio::multi_index<"txd"_n, shardbucket> txd_t_abi;
 #else
@@ -81,7 +81,7 @@ CONTRACT_START()
         
         uint64_t primary_key() const { return id; }
     };
-    typedef eosio::multi_index<"txdeosram"_n, transaction_data> txd;
+    typedef eosio::multi_index<"txdeosram"_n, transaction_data> txd_t;
 #endif
 
 #ifdef USE_VRAM
@@ -93,7 +93,7 @@ CONTRACT_START()
 
         uint128_t primary_key() const { return id; }
     };
-    typedef dapp::advanced_multi_index<"mt"_n, merkle_tree, uint128_t> mt;
+    typedef dapp::advanced_multi_index<"mt"_n, merkle_tree, uint128_t> mt_t;
     typedef eosio::multi_index<".mt"_n, merkle_tree> mt_t_v_abi;
     typedef eosio::multi_index<"mt"_n, shardbucket> mt_t_abi;
 #else
@@ -105,7 +105,7 @@ CONTRACT_START()
 
         uint64_t primary_key() const { return idx; }
     };
-    typedef eosio::multi_index<"mteosram"_n, merkle_tree> mt;
+    typedef eosio::multi_index<"mteosram"_n, merkle_tree> mt_t;
 #endif
 
 #ifdef USE_VRAM
@@ -116,7 +116,7 @@ CONTRACT_START()
 
         checksum256 primary_key() const { return val; }
     };
-    typedef dapp::advanced_multi_index<"nf"_n, nullifier, checksum256> nf;
+    typedef dapp::advanced_multi_index<"nf"_n, nullifier, checksum256> nf_t;
     typedef eosio::multi_index<".nf"_n, nullifier> nf_t_v_abi;
     typedef eosio::multi_index<"nf"_n, shardbucket> nf_t_abi;
 #else
@@ -128,20 +128,20 @@ CONTRACT_START()
         // on eos just use the lower 64 bits of the hash as primary key since collisions are very unlikely
         uint64_t primary_key() const { return *((uint64_t*)val.extract_as_byte_array().data()); }
     };
-    typedef eosio::multi_index<"nfeosram"_n, nullifier> nf;
+    typedef eosio::multi_index<"nfeosram"_n, nullifier> nf_t;
 #endif
 
     TABLE merkle_tree_state
     {
-        uint64_t index;             // = 0 for vram, = 1 for eos ram
-        uint64_t tree_index;        // current tree
-        uint128_t leaf_index;       // next empty leaf
+        uint64_t idx;               // = 0 for vram, = 1 for eos ram
+        uint64_t tree_idx;          // current tree
+        uint128_t leaf_idx;         // next empty leaf
         uint64_t depth;             // depth of the tree
         deque<checksum256> roots;   // stores the most recent roots defined by MTS_NUM_ROOTS. the current root is always the last element
 
-        uint64_t primary_key() const { return index; }
+        uint64_t primary_key() const { return idx; }
     };
-    typedef eosio::multi_index<"mtstate"_n, merkle_tree_state> mtstate;
+    typedef eosio::multi_index<"mtstate"_n, merkle_tree_state> mts_t;
 
     // token contract tables
     TABLE account

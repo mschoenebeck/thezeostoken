@@ -9,13 +9,13 @@ void thezeostoken::setvk(const name& code, const name& id, const string& vk)
 {
     require_auth(code);
     
-    vks vk_t(get_self(), code.value);
-    auto c = vk_t.find(id.value);
+    vks_t vks(get_self(), code.value);
+    auto c = vks.find(id.value);
     
-    if(c == vk_t.end())
+    if(c == vks.end())
     {
         // add new key
-        vk_t.emplace(code, [&](auto& row){
+        vks.emplace(code, [&](auto& row){
             row.id = id;
             row.vk = vk;
         });
@@ -25,12 +25,12 @@ void thezeostoken::setvk(const name& code, const name& id, const string& vk)
         if(vk.empty())
         {
             // erase existing key to free up RAM
-            vk_t.erase(c);
+            vks.erase(c);
         }
         else
         {
             // update existing key
-            vk_t.modify(c, code, [&](auto& row){
+            vks.modify(c, code, [&](auto& row){
                 row.vk = vk;
             });
         }
@@ -39,9 +39,9 @@ void thezeostoken::setvk(const name& code, const name& id, const string& vk)
 
 void thezeostoken::verifyproof(const name& code, const name& id, const string& proof, const string& inputs)
 {
-    vks vk_t(get_self(), code.value);
-    auto c = vk_t.find(id.value);
-    check(c != vk_t.end(), "id doesn't exist");
+    vks_t vks(get_self(), code.value);
+    auto c = vks.find(id.value);
+    check(c != vks.end(), "id doesn't exist");
 
     // TODO: is it okay to pack 'proof' and 'inputs' as JSON strings into URI? It seems to work here...
     string str = "zeos_verify_proof://";
@@ -144,19 +144,19 @@ void thezeostoken::ztransfer(const checksum256& epk_s,
     verifyproof(_self, "zeostransfer"_n, proof, inputs);
 
     // check if nullifier already exists in list, if not add it
-    nf _nf(_self, _self.value);
+    nf_t nf(_self, _self.value);
 #ifdef USE_VRAM
-    auto it =_nf.find(nf_a);
+    auto it = nf.find(nf_a);
 #else
-    auto it =_nf.find(*((uint64_t*)nf_a.extract_as_byte_array().data()));
+    auto it = nf.find(*((uint64_t*)nf_a.extract_as_byte_array().data()));
 #endif
-    check(it == _nf.end(), "nullifier exists => note has been spent already");
-    _nf.emplace(_self, [&](auto& n) {
+    check(it == nf.end(), "nullifier exists => note has been spent already");
+    nf.emplace(_self, [&](auto& n) {
         n.val = nf_a;
     });
 
     // check if root is valid
-    mtstate mts(_self, _self.value);
+    mts_t mts(_self, _self.value);
 #ifdef USE_VRAM
     auto state = mts.find(0);
 #else
@@ -216,19 +216,19 @@ void thezeostoken::zburn(const checksum256& epk_s,
     verifyproof(_self, "zeosburnnote"_n, proof, inputs);
 
     // check if nullifier already exists in list, if not add it
-    nf _nf(_self, _self.value);
+    nf_t nf(_self, _self.value);
 #ifdef USE_VRAM
-    auto it =_nf.find(nf_a);
+    auto it = nf.find(nf_a);
 #else
-    auto it =_nf.find(*((uint64_t*)nf_a.extract_as_byte_array().data()));
+    auto it = nf.find(*((uint64_t*)nf_a.extract_as_byte_array().data()));
 #endif
-    check(it == _nf.end(), "nullifier exists => note has been spent already");
-    _nf.emplace(_self, [&](auto& n) {
+    check(it ==  nf.end(), "nullifier exists => note has been spent already");
+    nf.emplace(_self, [&](auto& n) {
         n.val = nf_a;
     });
 
     // check if root is valid
-    mtstate mts(_self, _self.value);
+    mts_t mts(_self, _self.value);
 #ifdef USE_VRAM
     auto state = mts.find(0);
 #else
@@ -443,7 +443,7 @@ asset thezeostoken::get_balance(const name& owner, const symbol_code& sym) const
 void thezeostoken::insert_into_merkle_tree(const checksum256& val)
 {
     // fetch merkle tree state
-    mtstate mts(_self, _self.value);
+    mts_t mts(_self, _self.value);
 #ifdef USE_VRAM
     auto state = mts.find(0);
     typedef uint128_t idx_t;
@@ -454,10 +454,10 @@ void thezeostoken::insert_into_merkle_tree(const checksum256& val)
     check(state != mts.end(), "merkle tree state table not initialized");
 
     // calculate array index of next free leaf
-    idx_t idx = MT_ARR_OFFSET(state->depth) + state->leaf_index;
+    idx_t idx = MT_ARR_OFFSET(state->depth) + state->leaf_idx;
 
     // insert val into leaf
-    mt tree(_self, _self.value);
+    mt_t tree(_self, _self.value);
     tree.emplace(_self, [&](auto& leaf) {
         leaf.idx = idx;
         leaf.val = val;
@@ -509,7 +509,7 @@ void thezeostoken::insert_into_merkle_tree(const checksum256& val)
     
     // update tree state: increment leaf index, add new root to FIFO
     mts.modify(state, _self, [&](auto& row) {
-        row.leaf_index++;
+        row.leaf_idx++;
         row.roots.push_front(tree.get(0).val);
         // only memorize the most recent x number of root nodes
         if(row.roots.size() > MTS_ROOTS_FIFO_SIZE)
