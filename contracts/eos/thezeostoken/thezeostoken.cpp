@@ -74,6 +74,14 @@ void thezeostoken::verifyproof(const name& code, const name& id, const string& p
     //print("Proof verified by ", dsp_count, " DSPs\n\r");
 }
 
+void thezeostoken::zinit(const uint64_t& index,
+                         const uint64_t& depth)
+{
+    // empty all tables
+
+    // reset indices in merkle tree state table
+}
+
 // zMint
 void thezeostoken::zmint(const checksum256& epk_s,
                          const vector<uint8_t>& ciphertext_s,
