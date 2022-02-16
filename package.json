@@ -16,6 +16,7 @@
   "dependencies": {
     "@dfuse/client": "^0.3.0",
     "@liquidapps/box-utils": "^1.0.1",
+    "@liquidapps/dapp-client": "^2.0.7848",
     "@types/jest": "^23.3.1",
     "add-dependencies": "^1.1.0",
     "babel-polyfill": "^6.26.0",
