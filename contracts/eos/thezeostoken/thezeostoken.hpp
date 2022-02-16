@@ -255,4 +255,4 @@ CONTRACT_START()
     inline asset get_balance(const name& owner,
                              const symbol_code& sym) const;
     
-CONTRACT_END((setvk)(verifyproof)(zmint)(ztransfer)(zburn)(create)(issue)(retire)(transfer)(open)(close)(xdcommit))
+CONTRACT_END((setvk)(verifyproof)(zinit)(zmint)(ztransfer)(zburn)(create)(issue)(retire)(transfer)(open)(close)(xdcommit))

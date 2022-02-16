@@ -95,6 +95,23 @@ describe(`ZEOS Test`, async () => {
       }
     })();
   });
+  it('ZEOS zinit', done => {
+    (async () => {
+      try {
+        var res = await testcontract.zinit({
+          depth: 3,
+        }, {
+          authorization: `${code}@active`,
+          broadcast: true,
+          sign: true
+        });
+        done();
+      }
+      catch (e) {
+        done(e);
+      }
+    })();
+  });
   it('ZEOS set verifier key', done => {
     (async () => {
       try {
