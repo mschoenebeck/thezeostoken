@@ -169,7 +169,8 @@ CONTRACT_START()
                      const asset& value,
                      const name& ram_payer);
     
-    void insert_into_merkle_tree(const checksum256& val);
+    void insert_into_merkle_tree(const checksum256& val,
+                                 const bool& add_root_to_list);
 
     public:
 
@@ -192,35 +193,32 @@ CONTRACT_START()
     ACTION zinit(const uint64_t& depth);
 
     // zMint
-    ACTION zmint(const checksum256& epk_s,
-                 const vector<uint8_t>& ciphertext_s,
-                 const checksum256& epk_r,
-                 const vector<uint8_t>& ciphertext_r,
+    ACTION zmint(//const checksum256& epk_s,
+                 //const vector<uint8_t>& ciphertext_s,
+                 //const checksum256& epk_r,
+                 //const vector<uint8_t>& ciphertext_r,
                  const string& proof,
-                 //const string& inputs,
                  const asset& a,
                  const checksum256& z_a,
                  const name& user);
 
     // zTransfer
-    ACTION ztransfer(const checksum256& epk_s,
-                     const vector<uint8_t>& ciphertext_s,
-                     const checksum256& epk_r,
-                     const vector<uint8_t>& ciphertext_r,
+    ACTION ztransfer(//const checksum256& epk_s,
+                     //const vector<uint8_t>& ciphertext_s,
+                     //const checksum256& epk_r,
+                     //const vector<uint8_t>& ciphertext_r,
                      const string& proof,
-                     //const string& inputs,
                      const checksum256& nf_a,
                      const checksum256& z_b,
                      const checksum256& z_c,
                      const checksum256& root);
 
     // zBurn
-    ACTION zburn(const checksum256& epk_s,
-                 const vector<uint8_t>& ciphertext_s,
-                 const checksum256& epk_r,
-                 const vector<uint8_t>& ciphertext_r,
+    ACTION zburn(//const checksum256& epk_s,
+                 //const vector<uint8_t>& ciphertext_s,
+                 //const checksum256& epk_r,
+                 //const vector<uint8_t>& ciphertext_r,
                  const string& proof,
-                 //const string& inputs,
                  const checksum256& nf_a,
                  const asset& b,
                  const checksum256& z_c,

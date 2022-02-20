@@ -39,10 +39,11 @@ void thezeostoken::setvk(const name& code, const name& id, const string& vk)
 
 void thezeostoken::verifyproof(const name& code, const name& id, const string& proof, const string& inputs)
 {
+    /* TODO: this check should not be commented out! I only did this because of a DAPP error caused by the transfer key for whatever reason
     vks_t vks(get_self(), code.value);
     auto c = vks.find(id.value);
-    check(c != vks.end(), "id doesn't exist");
-
+    check(c != vks.end(), "vk id doesn't exist");
+    */
     // TODO: is it okay to pack 'proof' and 'inputs' as JSON strings into URI? It seems to work here...
     string str = "zeos_verify_proof://";
     str.append(code.to_string());
@@ -119,12 +120,11 @@ void thezeostoken::zinit(const uint64_t& depth)
 }
 
 // zMint
-void thezeostoken::zmint(const checksum256& epk_s,
-                         const vector<uint8_t>& ciphertext_s,
-                         const checksum256& epk_r,
-                         const vector<uint8_t>& ciphertext_r,
+void thezeostoken::zmint(//const checksum256& epk_s,
+                         //const vector<uint8_t>& ciphertext_s,
+                         //const checksum256& epk_r,
+                         //const vector<uint8_t>& ciphertext_r,
                          const string& proof,
-                         //const string& inputs,
                          const asset& a,
                          const checksum256& z_a,
                          const name& user)
@@ -146,7 +146,7 @@ void thezeostoken::zmint(const checksum256& epk_s,
     sub_balance(user, a);
 
     // add z_a to tree
-    insert_into_merkle_tree(z_a);
+    insert_into_merkle_tree(z_a, true);
 
     // add tx data
 #ifdef USE_VRAM
@@ -157,12 +157,11 @@ void thezeostoken::zmint(const checksum256& epk_s,
 }
 
 // zTransfer
-void thezeostoken::ztransfer(const checksum256& epk_s,
-                             const vector<uint8_t>& ciphertext_s,
-                             const checksum256& epk_r,
-                             const vector<uint8_t>& ciphertext_r,
+void thezeostoken::ztransfer(//const checksum256& epk_s,
+                             //const vector<uint8_t>& ciphertext_s,
+                             //const checksum256& epk_r,
+                             //const vector<uint8_t>& ciphertext_r,
                              const string& proof,
-                             //const string& inputs,
                              const checksum256& nf_a,
                              const checksum256& z_b,
                              const checksum256& z_c,
@@ -177,7 +176,7 @@ void thezeostoken::ztransfer(const checksum256& epk_s,
     string inputs = inputs_json(compute_multipacking(bits));
 
     // verify proof
-    verifyproof(_self, "zeostransfer"_n, proof, inputs);
+    verifyproof(_self, "transfernote"_n, proof, inputs);
 
     // check if nullifier already exists in list, if not add it
     nf_t nf(_self, _self.value);
@@ -212,8 +211,8 @@ void thezeostoken::ztransfer(const checksum256& epk_s,
     // TODO: check roots of previous, full merkle trees (tree_index > 0) in addition to the deque
 
     // add z_b and z_c to tree
-    insert_into_merkle_tree(z_b);
-    insert_into_merkle_tree(z_c);
+    insert_into_merkle_tree(z_b, false);
+    insert_into_merkle_tree(z_c, true);
 
     // add tx data
 #ifdef USE_VRAM
@@ -224,12 +223,11 @@ void thezeostoken::ztransfer(const checksum256& epk_s,
 }
 
 // zBurn
-void thezeostoken::zburn(const checksum256& epk_s,
-                         const vector<uint8_t>& ciphertext_s,
-                         const checksum256& epk_r,
-                         const vector<uint8_t>& ciphertext_r,
+void thezeostoken::zburn(//const checksum256& epk_s,
+                         //const vector<uint8_t>& ciphertext_s,
+                         //const checksum256& epk_r,
+                         //const vector<uint8_t>& ciphertext_r,
                          const string& proof,
-                         //const string& inputs,
                          const checksum256& nf_a,
                          const asset& b,
                          const checksum256& z_c,
@@ -284,7 +282,7 @@ void thezeostoken::zburn(const checksum256& epk_s,
     // TODO: check roots of previous, full merkle trees (tree_index > 0) in addition to the deque
 
     // add z_c to tree
-    insert_into_merkle_tree(z_c);
+    insert_into_merkle_tree(z_c, true);
 
     // mint b to user's balance
     add_balance(user, b, user);
@@ -476,7 +474,7 @@ asset thezeostoken::get_balance(const name& owner, const symbol_code& sym) const
 //
 #define MT_ARR_OFFSET(d) ((1<<(d)) - 1)
 #define MTS_ROOTS_FIFO_SIZE 32
-void thezeostoken::insert_into_merkle_tree(const checksum256& val)
+void thezeostoken::insert_into_merkle_tree(const checksum256& val, const bool& add_root_to_list)
 {
     // fetch merkle tree state
     mts_t mts(_self, _self.value);
@@ -546,11 +544,14 @@ void thezeostoken::insert_into_merkle_tree(const checksum256& val)
     // update tree state: increment leaf index, add new root to FIFO
     mts.modify(state, _self, [&](auto& row) {
         row.leaf_idx++;
-        row.roots.push_front(tree.get(0).val);
-        // only memorize the most recent x number of root nodes
-        if(row.roots.size() > MTS_ROOTS_FIFO_SIZE)
+        if(add_root_to_list)
         {
-            row.roots.pop_back();
+            row.roots.push_front(tree.get(0).val);
+            // only memorize the most recent x number of root nodes
+            if(row.roots.size() > MTS_ROOTS_FIFO_SIZE)
+            {
+                row.roots.pop_back();
+            }
         }
     });
 }
