@@ -171,6 +171,8 @@ CONTRACT_START()
     
     void insert_into_merkle_tree(const checksum256& val,
                                  const bool& add_root_to_list);
+    
+    bool is_root_valid(const checksum256& root);
 
     public:
 

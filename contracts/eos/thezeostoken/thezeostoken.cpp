@@ -191,6 +191,8 @@ void thezeostoken::ztransfer(//const checksum256& epk_s,
     });
 
     // check if root is valid
+    check(is_root_valid(root), "root invalid");
+    /*
     mts_t mts(_self, _self.value);
 #ifdef USE_VRAM
     auto state = mts.find(0);
@@ -209,7 +211,8 @@ void thezeostoken::ztransfer(//const checksum256& epk_s,
     }
     check(r != state->roots.end(), "root invalid");
     // TODO: check roots of previous, full merkle trees (tree_index > 0) in addition to the deque
-
+    */
+    
     // add z_b and z_c to tree
     insert_into_merkle_tree(z_b, false);
     insert_into_merkle_tree(z_c, true);
@@ -262,6 +265,8 @@ void thezeostoken::zburn(//const checksum256& epk_s,
     });
 
     // check if root is valid
+    check(is_root_valid(root), "root invalid");
+    /*
     mts_t mts(_self, _self.value);
 #ifdef USE_VRAM
     auto state = mts.find(0);
@@ -280,7 +285,8 @@ void thezeostoken::zburn(//const checksum256& epk_s,
     }
     check(r != state->roots.end(), "root invalid");
     // TODO: check roots of previous, full merkle trees (tree_index > 0) in addition to the deque
-
+    */
+    
     // add z_c to tree
     insert_into_merkle_tree(z_c, true);
 
@@ -472,7 +478,9 @@ asset thezeostoken::get_balance(const name& owner, const symbol_code& sym) const
 //   / \    / \    /  \    /  \
 // (7) (8)(9)(10)(11)(12)(13)(14)   [d = 3]
 //
-#define MT_ARR_OFFSET(d) ((1<<(d)) - 1)
+#define MT_ARR_LEAF_ROW_OFFSET(d) ((1<<(d)) - 1)
+#define MT_ARR_FULL_TREE_OFFSET(d) ((1<<((d)+1)) - 1)
+#define MT_NUM_LEAVES(d) (1<<(d))
 #define MTS_ROOTS_FIFO_SIZE 32
 void thezeostoken::insert_into_merkle_tree(const checksum256& val, const bool& add_root_to_list)
 {
@@ -487,13 +495,15 @@ void thezeostoken::insert_into_merkle_tree(const checksum256& val, const bool& a
 #endif
     check(state != mts.end(), "merkle tree state table not initialized");
 
-    // calculate array index of next free leaf
-    idx_t idx = MT_ARR_OFFSET(state->depth) + state->leaf_idx;
+    // calculate array index of next free leaf in >local< tree
+    idx_t idx = MT_ARR_LEAF_ROW_OFFSET(state->depth) + state->leaf_idx % MT_NUM_LEAVES(state->depth);
+    // calculate tree offset to translate array indices of >local< tree to global array indices
+    uint64_t tos = (uint64_t)(state->leaf_idx / MT_NUM_LEAVES(state->depth)) /*=tree_idx*/ * MT_ARR_FULL_TREE_OFFSET(state->depth);
 
     // insert val into leaf
     mt_t tree(_self, _self.value);
     tree.emplace(_self, [&](auto& leaf) {
-        leaf.idx = idx;
+        leaf.idx = tos + idx;
         leaf.val = val;
     });
 
@@ -507,8 +517,11 @@ void thezeostoken::insert_into_merkle_tree(const checksum256& val, const bool& a
         idx_t sis_idx = is_left_child ? idx + 1 : idx - 1;
 
         // get values of both nodes
-        checksum256 l = is_left_child ? tree.get(idx).val : tree.get(sis_idx).val;  //   (idx)     (0)
-        checksum256 r = is_left_child ? checksum256() /* =0 */ : tree.get(idx).val; // (sis_idx)  (idx)
+        //                                     (n)              |            (n)
+        //                                   /     \            |         /      \
+        //                                (idx)     (0)         |     (sis_idx)  (idx)
+        checksum256 l = is_left_child ? tree.get(tos + idx).val : tree.get(tos + sis_idx).val;
+        checksum256 r = is_left_child ? checksum256() /* =0 */  : tree.get(tos + idx).val;
 
         // concatenate and digest
         uint8_t digest[32];
@@ -524,12 +537,12 @@ void thezeostoken::insert_into_merkle_tree(const checksum256& val, const bool& a
         idx = is_left_child ? idx / 2 : sis_idx / 2;
 
         // check if parent node was already created
-        auto it = tree.find(idx);
+        auto it = tree.find(tos + idx);
         // write new parent
         if(it == tree.end())
         {
             tree.emplace(_self, [&](auto& node) {
-                node.idx = idx;
+                node.idx = tos + idx;
                 node.val = parent_val;
             });
         }
@@ -546,7 +559,7 @@ void thezeostoken::insert_into_merkle_tree(const checksum256& val, const bool& a
         row.leaf_idx++;
         if(add_root_to_list)
         {
-            row.roots.push_front(tree.get(0).val);
+            row.roots.push_front(tree.get(tos).val);
             // only memorize the most recent x number of root nodes
             if(row.roots.size() > MTS_ROOTS_FIFO_SIZE)
             {
@@ -555,3 +568,45 @@ void thezeostoken::insert_into_merkle_tree(const checksum256& val, const bool& a
         }
     });
 }
+
+bool thezeostoken::is_root_valid(const checksum256& root)
+{
+    // a root is valid if it is the root of an existing full merkle tree OR in the queue
+    // of the most recent roots of the current merkle tree
+    
+    // check if root is in deque of most recent roots
+    mts_t mts(_self, _self.value);
+#ifdef USE_VRAM
+    auto state = mts.find(0);
+#else
+    auto state = mts.find(1);
+#endif
+    check(state != mts.end(), "merkle tree state table not initialized");
+
+    for(auto r = state->roots.begin(); r != state->roots.end(); ++r)
+    {
+        if(*r == root)
+        {
+            return true;
+        }
+    }
+    
+    // check roots of previous, full merkle trees (tree_index > 0)
+    uint64_t tree_idx = (uint64_t)(state->leaf_idx / MT_NUM_LEAVES(state->depth));
+
+    mt_t tree(_self, _self.value);
+    for(uint64_t t = 0; t <= tree_idx; ++t)
+    {
+        // can use get here because root must exist if this tree has a leaf
+        auto it = tree.get(t * MT_ARR_FULL_TREE_OFFSET(state->depth));
+        
+        if(it.val == root)
+        {
+            return true;
+        }
+    }
+    
+    // root was not found
+    return false;
+}
+
