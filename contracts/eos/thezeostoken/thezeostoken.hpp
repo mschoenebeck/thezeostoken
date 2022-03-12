@@ -57,10 +57,10 @@ CONTRACT_START()
         // tx counter: auto increment
         uint128_t id;
         // the actual encrypted tx data
-        checksum256 epk_s;              // [u8; 32]
-        vector<uint8_t> ciphertext_s;   // Vec<u8>,
-        checksum256 epk_r;              // [u8; 32]
-        vector<uint8_t> ciphertext_r;   // Vec<u8>
+        checksum256 epk_s;                  // [u8; 32]
+        vector<uint128_t> ciphertext_s;   // Vec<[u8; 16]>,
+        checksum256 epk_r;                  // [u8; 32]
+        vector<uint128_t> ciphertext_r;   // Vec<[u8; 16]>
         
         uint128_t primary_key() const { return id; }
     };
@@ -74,10 +74,10 @@ CONTRACT_START()
         // tx counter: auto increment (uint64_t on EOS RAM)
         uint64_t id;
         // the actual encrypted tx data
-        checksum256 epk_s;              // [u8; 32]
-        vector<uint8_t> ciphertext_s;   // Vec<u8>,
-        checksum256 epk_r;              // [u8; 32]
-        vector<uint8_t> ciphertext_r;   // Vec<u8>
+        checksum256 epk_s;                  // [u8; 32]
+        vector<uint128_t> ciphertext_s;   // Vec<[u8; 16]>,
+        checksum256 epk_r;                  // [u8; 32]
+        vector<uint128_t> ciphertext_r;   // Vec<[u8; 16]>
         
         uint64_t primary_key() const { return id; }
     };
@@ -131,17 +131,17 @@ CONTRACT_START()
     typedef eosio::multi_index<"nfeosram"_n, nullifier> nf_t;
 #endif
 
-    TABLE merkle_tree_state
+    TABLE global_state
     {
         uint64_t idx;               // = 0 for vram, = 1 for eos ram
-        uint64_t tree_idx;          // current tree
-        uint128_t leaf_idx;         // next empty leaf
-        uint64_t depth;             // depth of the tree
-        deque<checksum256> roots;   // stores the most recent roots defined by MTS_NUM_ROOTS. the current root is always the last element
+        uint128_t tx_count;
+        uint128_t mt_leaf_idx;         // next empty leaf
+        uint64_t mt_depth;             // depth of the tree
+        deque<checksum256> mt_roots;   // stores the most recent roots defined by MTS_NUM_ROOTS. the current root is always the first element
 
         uint64_t primary_key() const { return idx; }
     };
-    typedef eosio::multi_index<"mtstate"_n, merkle_tree_state> mts_t;
+    typedef eosio::multi_index<"globalstate"_n, global_state> gs_t;
 
     // token contract tables
     TABLE account
@@ -174,6 +174,11 @@ CONTRACT_START()
     
     bool is_root_valid(const checksum256& root);
 
+    void add_txdata_to_list(const checksum256& epk_s,
+                            const vector<uint128_t>& ciphertext_s,
+                            const checksum256& epk_r,
+                            const vector<uint128_t>& ciphertext_r);
+
     public:
 
     thezeostoken(name self,
@@ -191,41 +196,41 @@ CONTRACT_START()
                        const string& proof,     
                        const string& inputs);
 
-    // zinit
-    ACTION zinit(const uint64_t& depth);
+    // init
+    ACTION init(const uint64_t& depth);
 
-    // zMint
-    ACTION zmint(//const checksum256& epk_s,
-                 //const vector<uint8_t>& ciphertext_s,
-                 //const checksum256& epk_r,
-                 //const vector<uint8_t>& ciphertext_r,
-                 const string& proof,
-                 const asset& a,
-                 const checksum256& z_a,
-                 const name& user);
+    // Mint
+    ACTION mint(const checksum256& epk_s,
+                const vector<uint128_t>& ciphertext_s,
+                const checksum256& epk_r,
+                const vector<uint128_t>& ciphertext_r,
+                const string& proof,
+                const asset& a,
+                const checksum256& z_a,
+                const name& user);
 
     // zTransfer
-    ACTION ztransfer(//const checksum256& epk_s,
-                     //const vector<uint8_t>& ciphertext_s,
-                     //const checksum256& epk_r,
-                     //const vector<uint8_t>& ciphertext_r,
+    ACTION ztransfer(const checksum256& epk_s,
+                     const vector<uint128_t>& ciphertext_s,
+                     const checksum256& epk_r,
+                     const vector<uint128_t>& ciphertext_r,
                      const string& proof,
                      const checksum256& nf_a,
                      const checksum256& z_b,
                      const checksum256& z_c,
                      const checksum256& root);
 
-    // zBurn
-    ACTION zburn(//const checksum256& epk_s,
-                 //const vector<uint8_t>& ciphertext_s,
-                 //const checksum256& epk_r,
-                 //const vector<uint8_t>& ciphertext_r,
-                 const string& proof,
-                 const checksum256& nf_a,
-                 const asset& b,
-                 const checksum256& z_c,
-                 const checksum256& root,
-                 const name& user);
+    // Burn
+    ACTION burn(const checksum256& epk_s,
+                const vector<uint128_t>& ciphertext_s,
+                const checksum256& epk_r,
+                const vector<uint128_t>& ciphertext_r,
+                const string& proof,
+                const checksum256& nf_a,
+                const asset& b,
+                const checksum256& z_c,
+                const checksum256& root,
+                const name& user);
 
     // token contract actions
     ACTION create(const name& issuer,
@@ -255,4 +260,4 @@ CONTRACT_START()
     inline asset get_balance(const name& owner,
                              const symbol_code& sym) const;
     
-CONTRACT_END((setvk)(verifyproof)(zinit)(zmint)(ztransfer)(zburn)(create)(issue)(retire)(transfer)(open)(close)(xdcommit))
+CONTRACT_END((setvk)(verifyproof)(init)(mint)(ztransfer)(burn)(create)(issue)(retire)(transfer)(open)(close)(xdcommit))
