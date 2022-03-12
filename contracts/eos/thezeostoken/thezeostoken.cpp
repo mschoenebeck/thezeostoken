@@ -93,18 +93,18 @@ void thezeostoken::init(const uint64_t& depth)
 //    for(auto it = gs.begin(); it != gs.end(); )
 //        it = gs.erase(it);
 #ifdef USE_VRAM
-    const uint64_t idx = 0;
+    const uint64_t id = 0;
 #else
-    const uint64_t idx = 1;
+    const uint64_t id = 1;
 #endif
     // reset indices in merkle tree state table
-    auto state = gs.find(idx);
+    auto state = gs.find(id);
     if(state == gs.end())
     {
         gs.emplace(_self, [&](auto& row){
-            row.idx = idx;
+            row.id = id;
             row.tx_count = 0;
-            row.mt_leaf_idx = 0;
+            row.mt_leaf_count = 0;
             row.mt_depth = depth;
             row.mt_roots = deque<checksum256>();
         });
@@ -113,7 +113,7 @@ void thezeostoken::init(const uint64_t& depth)
     {
         gs.modify(state, _self, [&](auto& row){
             row.tx_count = 0;
-            row.mt_leaf_idx = 0;
+            row.mt_leaf_count = 0;
             row.mt_depth = depth;
             row.mt_roots = deque<checksum256>();
         });
@@ -485,9 +485,9 @@ void thezeostoken::insert_into_merkle_tree(const checksum256& val, const bool& a
     check(state != gs.end(), "global state table not initialized");
 
     // calculate array index of next free leaf in >local< tree
-    idx_t idx = MT_ARR_LEAF_ROW_OFFSET(state->mt_depth) + state->mt_leaf_idx % MT_NUM_LEAVES(state->mt_depth);
+    idx_t idx = MT_ARR_LEAF_ROW_OFFSET(state->mt_depth) + state->mt_leaf_count % MT_NUM_LEAVES(state->mt_depth);
     // calculate tree offset to translate array indices of >local< tree to global array indices
-    uint64_t tos = (uint64_t)(state->mt_leaf_idx / MT_NUM_LEAVES(state->mt_depth)) /*=tree_idx*/ * MT_ARR_FULL_TREE_OFFSET(state->mt_depth);
+    uint64_t tos = (uint64_t)(state->mt_leaf_count / MT_NUM_LEAVES(state->mt_depth)) /*=tree_idx*/ * MT_ARR_FULL_TREE_OFFSET(state->mt_depth);
 
     // insert val into leaf
     mt_t tree(_self, _self.value);
@@ -545,7 +545,7 @@ void thezeostoken::insert_into_merkle_tree(const checksum256& val, const bool& a
     
     // update global state: increment leaf index, add new root to FIFO
     gs.modify(state, _self, [&](auto& row) {
-        row.mt_leaf_idx++;
+        row.mt_leaf_count++;
         if(add_root_to_list)
         {
             row.mt_roots.push_front(tree.get(tos).val);
@@ -581,7 +581,7 @@ bool thezeostoken::is_root_valid(const checksum256& root)
     }
     
     // check roots of previous, full merkle trees (tree_index > 0)
-    uint64_t tree_idx = (uint64_t)(state->mt_leaf_idx / MT_NUM_LEAVES(state->mt_depth));
+    uint64_t tree_idx = (uint64_t)(state->mt_leaf_count / MT_NUM_LEAVES(state->mt_depth));
 
     mt_t tree(_self, _self.value);
     for(uint64_t t = 0; t <= tree_idx; ++t)

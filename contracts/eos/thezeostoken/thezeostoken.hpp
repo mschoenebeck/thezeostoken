@@ -133,13 +133,13 @@ CONTRACT_START()
 
     TABLE global_state
     {
-        uint64_t idx;               // = 0 for vram, = 1 for eos ram
-        uint128_t tx_count;
-        uint128_t mt_leaf_idx;         // next empty leaf
-        uint64_t mt_depth;             // depth of the tree
-        deque<checksum256> mt_roots;   // stores the most recent roots defined by MTS_NUM_ROOTS. the current root is always the first element
+        uint64_t id;                    // = 0 for vram, = 1 for eos ram
+        uint128_t tx_count;             // number of private transactions
+        uint128_t mt_leaf_count;        // number of merkle tree leaves
+        uint64_t mt_depth;              // merkle tree depth
+        deque<checksum256> mt_roots;    // stores the most recent roots defined by MTS_NUM_ROOTS. the current root is always the first element
 
-        uint64_t primary_key() const { return idx; }
+        uint64_t primary_key() const { return id; }
     };
     typedef eosio::multi_index<"globalstate"_n, global_state> gs_t;
 
