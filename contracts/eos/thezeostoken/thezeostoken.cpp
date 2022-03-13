@@ -477,15 +477,13 @@ void thezeostoken::insert_into_merkle_tree(const checksum256& val, const bool& a
     gs_t gs(_self, _self.value);
 #ifdef USE_VRAM
     auto state = gs.find(0);
-    typedef uint128_t idx_t;
 #else
     auto state = gs.find(1);
-    typedef uint64_t idx_t;
 #endif
     check(state != gs.end(), "global state table not initialized");
 
     // calculate array index of next free leaf in >local< tree
-    idx_t idx = MT_ARR_LEAF_ROW_OFFSET(state->mt_depth) + state->mt_leaf_count % MT_NUM_LEAVES(state->mt_depth);
+    uint64_t idx = MT_ARR_LEAF_ROW_OFFSET(state->mt_depth) + state->mt_leaf_count % MT_NUM_LEAVES(state->mt_depth);
     // calculate tree offset to translate array indices of >local< tree to global array indices
     uint64_t tos = (uint64_t)(state->mt_leaf_count / MT_NUM_LEAVES(state->mt_depth)) /*=tree_idx*/ * MT_ARR_FULL_TREE_OFFSET(state->mt_depth);
 
@@ -503,7 +501,7 @@ void thezeostoken::insert_into_merkle_tree(const checksum256& val, const bool& a
         bool is_left_child = 1 == idx % 2;
 
         // determine sister node
-        idx_t sis_idx = is_left_child ? idx + 1 : idx - 1;
+        uint64_t sis_idx = is_left_child ? idx + 1 : idx - 1;
 
         // get values of both nodes
         //                                     (n)              |            (n)

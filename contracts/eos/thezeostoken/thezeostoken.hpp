@@ -54,30 +54,26 @@ CONTRACT_START()
     // zeos private transaction data table
     TABLE transaction_data
     {
-        // tx counter: auto increment
-        uint128_t id;
-        // the actual encrypted tx data
-        checksum256 epk_s;                  // [u8; 32]
-        vector<uint128_t> ciphertext_s;   // Vec<[u8; 16]>,
-        checksum256 epk_r;                  // [u8; 32]
-        vector<uint128_t> ciphertext_r;   // Vec<[u8; 16]>
+        uint64_t id;
+        checksum256 epk_s;
+        vector<uint128_t> ciphertext_s;
+        checksum256 epk_r;
+        vector<uint128_t> ciphertext_r;
         
-        uint128_t primary_key() const { return id; }
+        uint64_t primary_key() const { return id; }
     };
-    typedef dapp::advanced_multi_index<"txd"_n, transaction_data, uint128_t> txd_t;
+    typedef dapp::advanced_multi_index<"txd"_n, transaction_data, uint64_t> txd_t;
     typedef eosio::multi_index<".txd"_n, transaction_data> txd_t_v_abi;
     typedef eosio::multi_index<"txd"_n, shardbucket> txd_t_abi;
 #else
     // zeos private transaction data table
     TABLE transaction_data
     {
-        // tx counter: auto increment (uint64_t on EOS RAM)
         uint64_t id;
-        // the actual encrypted tx data
-        checksum256 epk_s;                  // [u8; 32]
-        vector<uint128_t> ciphertext_s;   // Vec<[u8; 16]>,
-        checksum256 epk_r;                  // [u8; 32]
-        vector<uint128_t> ciphertext_r;   // Vec<[u8; 16]>
+        checksum256 epk_s;
+        vector<uint128_t> ciphertext_s;
+        checksum256 epk_r;
+        vector<uint128_t> ciphertext_r;
         
         uint64_t primary_key() const { return id; }
     };
@@ -88,19 +84,19 @@ CONTRACT_START()
     // zeos note commitments merkle tree table
     TABLE merkle_tree
     {
-        uint128_t idx;
+        uint64_t idx;
         checksum256 val;
 
-        uint128_t primary_key() const { return id; }
+        uint64_t primary_key() const { return idx; }
     };
-    typedef dapp::advanced_multi_index<"mt"_n, merkle_tree, uint128_t> mt_t;
+    typedef dapp::advanced_multi_index<"mt"_n, merkle_tree, uint64_t> mt_t;
     typedef eosio::multi_index<".mt"_n, merkle_tree> mt_t_v_abi;
     typedef eosio::multi_index<"mt"_n, shardbucket> mt_t_abi;
 #else
     // zeos note commitments merkle tree table
     TABLE merkle_tree
     {
-        uint64_t idx;       // uint64_t on EOS RAM
+        uint64_t idx;
         checksum256 val;
 
         uint64_t primary_key() const { return idx; }
@@ -134,8 +130,8 @@ CONTRACT_START()
     TABLE global_state
     {
         uint64_t id;                    // = 0 for vram, = 1 for eos ram
-        uint128_t tx_count;             // number of private transactions
-        uint128_t mt_leaf_count;        // number of merkle tree leaves
+        uint64_t tx_count;              // number of private transactions
+        uint64_t mt_leaf_count;         // number of merkle tree leaves
         uint64_t mt_depth;              // merkle tree depth
         deque<checksum256> mt_roots;    // stores the most recent roots defined by MTS_NUM_ROOTS. the current root is always the first element
 
