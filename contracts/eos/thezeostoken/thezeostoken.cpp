@@ -172,8 +172,8 @@ void thezeostoken::ztransfer(const checksum256& epk_s,
     append_bits(bits, root);
     string inputs = inputs_json(compute_multipacking(bits));
 
-    // verify proof
-    verifyproof(_self, "transfernote"_n, proof, inputs);
+    // check if root is valid
+    check(is_root_valid(root), "root invalid");
 
     // check if nullifier already exists in list, if not add it
     nf_t nf(_self, _self.value);
@@ -186,29 +186,9 @@ void thezeostoken::ztransfer(const checksum256& epk_s,
     nf.emplace(_self, [&](auto& n) {
         n.val = nf_a;
     });
-
-    // check if root is valid
-    check(is_root_valid(root), "root invalid");
-    /*
-    gs_t gs(_self, _self.value);
-#ifdef USE_VRAM
-    auto state = gs.find(0);
-#else
-    auto state = gs.find(1);
-#endif
-    check(state != gs.end(), "global state table not initialized");
-    auto r = state->roots.begin();
-    while(r != state->roots.end())
-    {
-        if(*r == root)
-        {
-            break;
-        }
-        r++;
-    }
-    check(r != state->roots.end(), "root invalid");
-    // TODO: check roots of previous, full merkle trees (tree_index > 0) in addition to the deque
-    */
+    
+    // verify proof
+    verifyproof(_self, "transfernote"_n, proof, inputs);
     
     // add z_b and z_c to tree
     insert_into_merkle_tree(z_b, false);
@@ -242,8 +222,8 @@ void thezeostoken::burn(const checksum256& epk_s,
     append_bits(bits, root);
     string inputs = inputs_json(compute_multipacking(bits));
 
-    // verify proof
-    verifyproof(_self, "zeosburnnote"_n, proof, inputs);
+    // check if root is valid
+    check(is_root_valid(root), "root invalid");
 
     // check if nullifier already exists in list, if not add it
     nf_t nf(_self, _self.value);
@@ -257,28 +237,8 @@ void thezeostoken::burn(const checksum256& epk_s,
         n.val = nf_a;
     });
 
-    // check if root is valid
-    check(is_root_valid(root), "root invalid");
-    /*
-    gs_t gs(_self, _self.value);
-#ifdef USE_VRAM
-    auto state = gs.find(0);
-#else
-    auto state = gs.find(1);
-#endif
-    check(state != gs.end(), "global state table not initialized");
-    auto r = state->roots.begin();
-    while(r != state->roots.end())
-    {
-        if(*r == root)
-        {
-            break;
-        }
-        r++;
-    }
-    check(r != state->roots.end(), "root invalid");
-    // TODO: check roots of previous, full merkle trees (tree_index > 0) in addition to the deque
-    */
+    // verify proof
+    verifyproof(_self, "zeosburnnote"_n, proof, inputs);
     
     // add z_c to tree
     insert_into_merkle_tree(z_c, true);
@@ -579,10 +539,10 @@ bool thezeostoken::is_root_valid(const checksum256& root)
     }
     
     // check roots of previous, full merkle trees (tree_index > 0)
-    uint64_t tree_idx = (uint64_t)(state->mt_leaf_count / MT_NUM_LEAVES(state->mt_depth));
+    uint64_t tree_idx = state->mt_leaf_count / MT_NUM_LEAVES(state->mt_depth);
 
     mt_t tree(_self, _self.value);
-    for(uint64_t t = 0; t <= tree_idx; ++t)
+    for(uint64_t t = 0; t < tree_idx; ++t)
     {
         // can use get here because root must exist if this tree has a leaf
         auto it = tree.get(t * MT_ARR_FULL_TREE_OFFSET(state->mt_depth));
