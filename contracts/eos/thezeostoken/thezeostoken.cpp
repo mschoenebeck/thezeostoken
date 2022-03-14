@@ -180,7 +180,7 @@ void thezeostoken::ztransfer(const checksum256& epk_s,
 #ifdef USE_VRAM
     auto it = nf.find(nf_a);
 #else
-    auto it = nf.find(*((uint64_t*)nf_a.extract_as_byte_array().data()));
+    auto it = nf.find((uint64_t)*((uint32_t*)nf_a.extract_as_byte_array().data()));
 #endif
     check(it == nf.end(), "nullifier exists => note has been spent already");
     nf.emplace(_self, [&](auto& n) {
@@ -230,7 +230,7 @@ void thezeostoken::burn(const checksum256& epk_s,
 #ifdef USE_VRAM
     auto it = nf.find(nf_a);
 #else
-    auto it = nf.find(*((uint64_t*)nf_a.extract_as_byte_array().data()));
+    auto it = nf.find((uint64_t)*((uint32_t*)nf_a.extract_as_byte_array().data()));
 #endif
     check(it ==  nf.end(), "nullifier exists => note has been spent already");
     nf.emplace(_self, [&](auto& n) {

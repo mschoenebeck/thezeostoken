@@ -122,7 +122,7 @@ CONTRACT_START()
         checksum256 val;
 
         // on eos just use the lower 64 bits of the hash as primary key since collisions are very unlikely
-        uint64_t primary_key() const { return *((uint64_t*)val.extract_as_byte_array().data()); }
+        uint64_t primary_key() const { return (uint64_t)*((uint32_t*)val.extract_as_byte_array().data()); }
     };
     typedef eosio::multi_index<"nfeosram"_n, nullifier> nf_t;
 #endif
