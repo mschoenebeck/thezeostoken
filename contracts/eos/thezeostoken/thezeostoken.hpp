@@ -127,7 +127,7 @@ CONTRACT_START()
     typedef eosio::multi_index<"nfeosram"_n, nullifier> nf_t;
 #endif
 
-    TABLE global_state
+    TABLE global_stats
     {
         uint64_t id;                    // = 0 for vram, = 1 for eos ram
         uint64_t tx_count;              // number of private transactions
@@ -137,7 +137,7 @@ CONTRACT_START()
 
         uint64_t primary_key() const { return id; }
     };
-    typedef eosio::multi_index<"globalstate"_n, global_state> gs_t;
+    typedef eosio::multi_index<"globalstats"_n, global_stats> gs_t;
 
     // token contract tables
     TABLE account

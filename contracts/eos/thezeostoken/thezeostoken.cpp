@@ -433,14 +433,14 @@ asset thezeostoken::get_balance(const name& owner, const symbol_code& sym) const
 #define GS_ROOTS_FIFO_SIZE 32
 void thezeostoken::insert_into_merkle_tree(const checksum256& val, const bool& add_root_to_list)
 {
-    // fetch merkle tree state
+    // fetch global state
     gs_t gs(_self, _self.value);
 #ifdef USE_VRAM
     auto state = gs.find(0);
 #else
     auto state = gs.find(1);
 #endif
-    check(state != gs.end(), "global state table not initialized");
+    check(state != gs.end(), "global stats table not initialized");
 
     // calculate array index of next free leaf in >local< tree
     uint64_t idx = MT_ARR_LEAF_ROW_OFFSET(state->mt_depth) + state->mt_leaf_count % MT_NUM_LEAVES(state->mt_depth);
@@ -528,7 +528,7 @@ bool thezeostoken::is_root_valid(const checksum256& root)
 #else
     auto state = gs.find(1);
 #endif
-    check(state != gs.end(), "merkle tree state table not initialized");
+    check(state != gs.end(), "global stats table not initialized");
 
     for(auto r = state->mt_roots.begin(); r != state->mt_roots.end(); ++r)
     {
@@ -569,7 +569,7 @@ void thezeostoken::add_txdata_to_list(const checksum256& epk_s,
 #else
     auto state = gs.find(1);
 #endif
-    check(state != gs.end(), "global state table not initialized");
+    check(state != gs.end(), "global stats table not initialized");
     txd.emplace(_self, [&](auto& tx) {
 #ifdef USE_VRAM
         tx.id = state->tx_count;
