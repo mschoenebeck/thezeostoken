@@ -281,6 +281,8 @@ void thezeostoken::issue(const name& to, const asset& quantity, const string& me
     check(existing != statstable.end(), "token with symbol does not exist, create token before issue");
     const auto& st = *existing;
 
+// TODO: ALWAYS CHECK IF THE FAUCET IS TURNED OFF!
+//check(quantity.amount <= 1000000, "only 100 ZEOS tokens are allowed per faucet issue");
     require_auth(st.issuer);
     check(quantity.is_valid(), "invalid quantity");
     check(quantity.amount > 0, "must issue positive quantity");
