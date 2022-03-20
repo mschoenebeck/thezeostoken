@@ -97,9 +97,9 @@ void thezeostoken::init(const uint64_t& depth)
 #else
     const uint64_t id = 1;
 #endif
-    // reset indices in merkle tree state table
-    auto state = gs.find(id);
-    if(state == gs.end())
+    // reset indices in global stats table
+    auto stats = gs.find(id);
+    if(stats == gs.end())
     {
         gs.emplace(_self, [&](auto& row){
             row.id = id;
@@ -111,7 +111,7 @@ void thezeostoken::init(const uint64_t& depth)
     }
     else
     {
-        gs.modify(state, _self, [&](auto& row){
+        gs.modify(stats, _self, [&](auto& row){
             row.tx_count = 0;
             row.mt_leaf_count = 0;
             row.mt_depth = depth;
@@ -149,8 +149,16 @@ void thezeostoken::mint(const checksum256& epk_s,
     // add z_a to tree
     insert_into_merkle_tree(z_a, true);
 
+    gs_t gs(_self, _self.value);
+#ifdef USE_VRAM
+    auto stats = gs.find(0);
+#else
+    auto stats = gs.find(1);
+#endif
+    check(stats != gs.end(), "global stats table not initialized");
+
     // add tx data
-    add_txdata_to_list(epk_s, ciphertext_s, epk_r, ciphertext_r);
+    add_txdata_to_list(TXD_MINT, stats->mt_leaf_count-1, epk_s, ciphertext_s, epk_r, ciphertext_r);
 }
 
 // zTransfer
@@ -194,8 +202,16 @@ void thezeostoken::ztransfer(const checksum256& epk_s,
     insert_into_merkle_tree(z_b, false);
     insert_into_merkle_tree(z_c, true);
 
+    gs_t gs(_self, _self.value);
+#ifdef USE_VRAM
+    auto stats = gs.find(0);
+#else
+    auto stats = gs.find(1);
+#endif
+    check(stats != gs.end(), "global stats table not initialized");
+
     // add tx data
-    add_txdata_to_list(epk_s, ciphertext_s, epk_r, ciphertext_r);
+    add_txdata_to_list(TXD_ZTRANSFER, stats->mt_leaf_count-2, epk_s, ciphertext_s, epk_r, ciphertext_r);
 }
 
 // zBurn
@@ -246,8 +262,16 @@ void thezeostoken::burn(const checksum256& epk_s,
     // mint b to user's balance
     add_balance(user, b, user);
 
+    gs_t gs(_self, _self.value);
+#ifdef USE_VRAM
+    auto stats = gs.find(0);
+#else
+    auto stats = gs.find(1);
+#endif
+    check(stats != gs.end(), "global stats table not initialized");
+
     // add tx data
-    add_txdata_to_list(epk_s, ciphertext_s, epk_r, ciphertext_r);
+    add_txdata_to_list(TXD_BURN, stats->mt_leaf_count-1, epk_s, ciphertext_s, epk_r, ciphertext_r);
 }
 
 void thezeostoken::create(const name& issuer, const asset& maximum_supply)
@@ -435,19 +459,19 @@ asset thezeostoken::get_balance(const name& owner, const symbol_code& sym) const
 #define GS_ROOTS_FIFO_SIZE 32
 void thezeostoken::insert_into_merkle_tree(const checksum256& val, const bool& add_root_to_list)
 {
-    // fetch global state
+    // fetch global stats
     gs_t gs(_self, _self.value);
 #ifdef USE_VRAM
-    auto state = gs.find(0);
+    auto stats = gs.find(0);
 #else
-    auto state = gs.find(1);
+    auto stats = gs.find(1);
 #endif
-    check(state != gs.end(), "global stats table not initialized");
+    check(stats != gs.end(), "global stats table not initialized");
 
     // calculate array index of next free leaf in >local< tree
-    uint64_t idx = MT_ARR_LEAF_ROW_OFFSET(state->mt_depth) + state->mt_leaf_count % MT_NUM_LEAVES(state->mt_depth);
+    uint64_t idx = MT_ARR_LEAF_ROW_OFFSET(stats->mt_depth) + stats->mt_leaf_count % MT_NUM_LEAVES(stats->mt_depth);
     // calculate tree offset to translate array indices of >local< tree to global array indices
-    uint64_t tos = (uint64_t)(state->mt_leaf_count / MT_NUM_LEAVES(state->mt_depth)) /*=tree_idx*/ * MT_ARR_FULL_TREE_OFFSET(state->mt_depth);
+    uint64_t tos = stats->mt_leaf_count / MT_NUM_LEAVES(stats->mt_depth) /*=tree_idx*/ * MT_ARR_FULL_TREE_OFFSET(stats->mt_depth);
 
     // insert val into leaf
     mt_t tree(_self, _self.value);
@@ -457,7 +481,7 @@ void thezeostoken::insert_into_merkle_tree(const checksum256& val, const bool& a
     });
 
     // calculate merkle path up to root
-    for(int d = state->mt_depth; d > 0; d--)
+    for(int d = stats->mt_depth; d > 0; d--)
     {
         // if array index of node is uneven it is always the left child
         bool is_left_child = 1 == idx % 2;
@@ -503,8 +527,8 @@ void thezeostoken::insert_into_merkle_tree(const checksum256& val, const bool& a
         }
     }
     
-    // update global state: increment leaf index, add new root to FIFO
-    gs.modify(state, _self, [&](auto& row) {
+    // update global stats: increment leaf index, add new root to FIFO
+    gs.modify(stats, _self, [&](auto& row) {
         row.mt_leaf_count++;
         if(add_root_to_list)
         {
@@ -526,13 +550,13 @@ bool thezeostoken::is_root_valid(const checksum256& root)
     // check if root is in deque of most recent roots
     gs_t gs(_self, _self.value);
 #ifdef USE_VRAM
-    auto state = gs.find(0);
+    auto stats = gs.find(0);
 #else
-    auto state = gs.find(1);
+    auto stats = gs.find(1);
 #endif
-    check(state != gs.end(), "global stats table not initialized");
+    check(stats != gs.end(), "global stats table not initialized");
 
-    for(auto r = state->mt_roots.begin(); r != state->mt_roots.end(); ++r)
+    for(auto r = stats->mt_roots.begin(); r != stats->mt_roots.end(); ++r)
     {
         if(*r == root)
         {
@@ -541,13 +565,13 @@ bool thezeostoken::is_root_valid(const checksum256& root)
     }
     
     // check roots of previous, full merkle trees (tree_index > 0)
-    uint64_t tree_idx = state->mt_leaf_count / MT_NUM_LEAVES(state->mt_depth);
+    uint64_t tree_idx = stats->mt_leaf_count / MT_NUM_LEAVES(stats->mt_depth);
 
     mt_t tree(_self, _self.value);
     for(uint64_t t = 0; t < tree_idx; ++t)
     {
         // can use get here because root must exist if this tree has a leaf
-        auto it = tree.get(t * MT_ARR_FULL_TREE_OFFSET(state->mt_depth));
+        auto it = tree.get(t * MT_ARR_FULL_TREE_OFFSET(stats->mt_depth));
         
         if(it.val == root)
         {
@@ -559,7 +583,9 @@ bool thezeostoken::is_root_valid(const checksum256& root)
     return false;
 }
 
-void thezeostoken::add_txdata_to_list(const checksum256& epk_s,
+void thezeostoken::add_txdata_to_list(const uint8_t& type,
+                                      const uint64_t& mt_leaf_count,
+                                      const checksum256& epk_s,
                                       const vector<uint128_t>& ciphertext_s,
                                       const checksum256& epk_r,
                                       const vector<uint128_t>& ciphertext_r)
@@ -567,23 +593,21 @@ void thezeostoken::add_txdata_to_list(const checksum256& epk_s,
     gs_t gs(_self, _self.value);
     txd_t txd(_self, _self.value);
 #ifdef USE_VRAM
-    auto state = gs.find(0);
+    auto stats = gs.find(0);
 #else
-    auto state = gs.find(1);
+    auto stats = gs.find(1);
 #endif
-    check(state != gs.end(), "global stats table not initialized");
+    check(stats != gs.end(), "global stats table not initialized");
     txd.emplace(_self, [&](auto& tx) {
-#ifdef USE_VRAM
-        tx.id = state->tx_count;
-#else
-        tx.id = (uint64_t)state->tx_count;
-#endif
+        tx.id = stats->tx_count;
+        tx.type = type;
+        tx.mt_leaf_count = mt_leaf_count;
         tx.epk_s = epk_s;
         tx.ciphertext_s = ciphertext_s;
         tx.epk_r = epk_r;
         tx.ciphertext_r = ciphertext_r;
     });
-    gs.modify(state, _self, [&](auto& row) {
+    gs.modify(stats, _self, [&](auto& row) {
         row.tx_count++;
     });
 }

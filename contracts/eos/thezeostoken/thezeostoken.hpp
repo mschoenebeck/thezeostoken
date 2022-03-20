@@ -24,6 +24,9 @@ using namespace std;
     IPFS_SVC_COMMANDS() \
     ORACLE_SVC_COMMANDS()
 
+#define TXD_MINT        1
+#define TXD_ZTRANSFER   2
+#define TXD_BURN        3
 
 #define CONTRACT_NAME() thezeostoken
 
@@ -50,11 +53,12 @@ CONTRACT_START()
     typedef eosio::multi_index<".verifierkey"_n, verifierkey> vks_t_v_abi;
     typedef eosio::multi_index<"verifierkey"_n, shardbucket> vks_t_abi;
 
-#ifdef USE_VRAM
     // zeos private transaction data table
     TABLE transaction_data
     {
         uint64_t id;
+        uint8_t type;
+        uint64_t mt_leaf_count;
         checksum256 epk_s;
         vector<uint128_t> ciphertext_s;
         checksum256 epk_r;
@@ -62,25 +66,14 @@ CONTRACT_START()
         
         uint64_t primary_key() const { return id; }
     };
+#ifdef USE_VRAM
     typedef dapp::advanced_multi_index<"txd"_n, transaction_data, uint64_t> txd_t;
     typedef eosio::multi_index<".txd"_n, transaction_data> txd_t_v_abi;
     typedef eosio::multi_index<"txd"_n, shardbucket> txd_t_abi;
 #else
-    // zeos private transaction data table
-    TABLE transaction_data
-    {
-        uint64_t id;
-        checksum256 epk_s;
-        vector<uint128_t> ciphertext_s;
-        checksum256 epk_r;
-        vector<uint128_t> ciphertext_r;
-        
-        uint64_t primary_key() const { return id; }
-    };
     typedef eosio::multi_index<"txdeosram"_n, transaction_data> txd_t;
 #endif
 
-#ifdef USE_VRAM
     // zeos note commitments merkle tree table
     TABLE merkle_tree
     {
@@ -89,38 +82,25 @@ CONTRACT_START()
 
         uint64_t primary_key() const { return idx; }
     };
+#ifdef USE_VRAM
     typedef dapp::advanced_multi_index<"mt"_n, merkle_tree, uint64_t> mt_t;
     typedef eosio::multi_index<".mt"_n, merkle_tree> mt_t_v_abi;
     typedef eosio::multi_index<"mt"_n, shardbucket> mt_t_abi;
 #else
-    // zeos note commitments merkle tree table
-    TABLE merkle_tree
-    {
-        uint64_t idx;
-        checksum256 val;
-
-        uint64_t primary_key() const { return idx; }
-    };
     typedef eosio::multi_index<"mteosram"_n, merkle_tree> mt_t;
 #endif
 
-#ifdef USE_VRAM
     // zeos nullifier table
     TABLE nullifier
     {
         checksum256 val;
-
+#ifdef USE_VRAM
         checksum256 primary_key() const { return val; }
     };
     typedef dapp::advanced_multi_index<"nf"_n, nullifier, checksum256> nf_t;
     typedef eosio::multi_index<".nf"_n, nullifier> nf_t_v_abi;
     typedef eosio::multi_index<"nf"_n, shardbucket> nf_t_abi;
 #else
-    // zeos nullifier table
-    TABLE nullifier
-    {
-        checksum256 val;
-
         // on eos just use the lower 64 bits of the hash as primary key since collisions are very unlikely
         uint64_t primary_key() const { return (uint64_t)*((uint32_t*)val.extract_as_byte_array().data()); }
     };
@@ -170,7 +150,9 @@ CONTRACT_START()
     
     bool is_root_valid(const checksum256& root);
 
-    void add_txdata_to_list(const checksum256& epk_s,
+    void add_txdata_to_list(const uint8_t& type,
+                            const uint64_t& mt_leaf_count,
+                            const checksum256& epk_s,
                             const vector<uint128_t>& ciphertext_s,
                             const checksum256& epk_r,
                             const vector<uint128_t>& ciphertext_r);
