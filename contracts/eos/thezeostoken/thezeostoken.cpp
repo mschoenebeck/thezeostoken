@@ -40,6 +40,7 @@ void thezeostoken::setvk(const name& code, const name& id, const string& vk)
 void thezeostoken::verifyproof(const name& code, const name& id, const string& proof, const string& inputs)
 {
     /* TODO: this check should not be commented out! I only did this because of a DAPP error caused by the transfer key for whatever reason
+    PROBABLY BECAUSE OF NOT ENOUGH RAM TO LOAD THE KEY FROM VRAM TO EOS RAM???
     vks_t vks(get_self(), code.value);
     auto c = vks.find(id.value);
     check(c != vks.end(), "vk id doesn't exist");
