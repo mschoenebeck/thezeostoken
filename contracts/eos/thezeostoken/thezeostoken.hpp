@@ -9,9 +9,9 @@
 #include "../dappservices/ipfs.hpp"
 #include "../dappservices/multi_index.hpp"
 #include "../dappservices/oracle.hpp"
-#include "zeos.hpp"
-#include "blake2s.h"
+#include "../zeosio/include/zeosio.hpp"
 
+using namespace zeos::groth16;
 using namespace eosio;
 using namespace std;
 
