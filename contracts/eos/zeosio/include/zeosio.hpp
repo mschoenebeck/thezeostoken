@@ -210,5 +210,59 @@ namespace zeos
 
             return res;
         }
+
+        // from: https://stackoverflow.com/a/47526992/2340535
+        // adjusted to C types
+        string BytesArrayToHexString(uint8_t* src)
+        {
+            const uint8_t n = 8;
+            static const char table[] = "0123456789ABCDEF";
+            char dst[2 * n + 1];
+            const uint8_t* srcPtr = src;
+            char* dstPtr = dst;
+            for (auto count = n; count > 0; --count)
+            {
+                unsigned char c = *srcPtr++;
+                *dstPtr++ = table[c >> 4];
+                *dstPtr++ = table[c & 0x0f];
+            }
+            *dstPtr = 0;
+            return &dst[0];
+        }
+
+        string inputs_hexstr(const vector<Scalar>& inputs)
+        {
+            static const char table[] = "0123456789ABCDEF";
+            char dst[3];
+            char* dstPtr = dst;
+            unsigned char c = inputs.size();
+            *dstPtr++ = table[c >> 4];
+            *dstPtr++ = table[c & 0x0f];
+            *dstPtr = 0;
+
+            string res = dst;
+
+            for(int i = 0; i < inputs.size(); i++)
+            {
+                // cast from: https://stackoverflow.com/a/53807122/2340535
+                uint64_t proper_endian_uint64 = inputs[i].data[0];
+                uint8_t (&array_of_bytes0)[sizeof(uint64_t)] = *reinterpret_cast<uint8_t(*)[sizeof(uint64_t)]>(&proper_endian_uint64);
+                res.append(BytesArrayToHexString(array_of_bytes0));
+
+                proper_endian_uint64 = inputs[i].data[1];
+                uint8_t (&array_of_bytes1)[sizeof(uint64_t)] = *reinterpret_cast<uint8_t(*)[sizeof(uint64_t)]>(&proper_endian_uint64);
+                res.append(BytesArrayToHexString(array_of_bytes1));
+
+                proper_endian_uint64 = inputs[i].data[2];
+                uint8_t (&array_of_bytes2)[sizeof(uint64_t)] = *reinterpret_cast<uint8_t(*)[sizeof(uint64_t)]>(&proper_endian_uint64);
+                res.append(BytesArrayToHexString(array_of_bytes2));
+
+                proper_endian_uint64 = inputs[i].data[3];
+                uint8_t (&array_of_bytes3)[sizeof(uint64_t)] = *reinterpret_cast<uint8_t(*)[sizeof(uint64_t)]>(&proper_endian_uint64);
+                res.append(BytesArrayToHexString(array_of_bytes3));
+            }
+
+            return res;
+        }
     } // namespace groth16
 } // namespace zeos

@@ -140,10 +140,10 @@ void thezeostoken::mint(const checksum256& epk_s,
     append_bits(bits, a.amount);
     append_bits(bits, a.symbol.raw());
     append_bits(bits, z_a);
-    string inputs = inputs_json(compute_multipacking(bits));
+    string inputs = inputs_hexstr(compute_multipacking(bits));
 
     // verify proof
-    //verifyproof(_self, "zeosmintnote"_n, proof, inputs);
+    verifyproof("groth16", _self, "zeosmintnote"_n, proof, inputs);
 
     // burn a from user's balance
     sub_balance(user, a);
@@ -180,7 +180,7 @@ void thezeostoken::ztransfer(const checksum256& epk_s,
     append_bits(bits, z_b);
     append_bits(bits, z_c);
     append_bits(bits, root);
-    string inputs = inputs_json(compute_multipacking(bits));
+    string inputs = inputs_hexstr(compute_multipacking(bits));
 
     // check if root is valid
     check(is_root_valid(root), "root invalid");
@@ -198,7 +198,7 @@ void thezeostoken::ztransfer(const checksum256& epk_s,
     });
     
     // verify proof
-    //verifyproof(_self, "transfernote"_n, proof, inputs);
+    verifyproof("groth16", _self, "transfernote"_n, proof, inputs);
     
     // add z_b and z_c to tree
     insert_into_merkle_tree(z_b, false);
@@ -238,7 +238,7 @@ void thezeostoken::burn(const checksum256& epk_s,
     append_bits(bits, b.symbol.raw());
     append_bits(bits, z_c);
     append_bits(bits, root);
-    string inputs = inputs_json(compute_multipacking(bits));
+    string inputs = inputs_hexstr(compute_multipacking(bits));
 
     // check if root is valid
     check(is_root_valid(root), "root invalid");
@@ -256,7 +256,7 @@ void thezeostoken::burn(const checksum256& epk_s,
     });
 
     // verify proof
-    //verifyproof(_self, "zeosburnnote"_n, proof, inputs);
+    verifyproof("groth16", _self, "zeosburnnote"_n, proof, inputs);
     
     // add z_c to tree
     insert_into_merkle_tree(z_c, true);
