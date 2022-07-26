@@ -73,7 +73,7 @@ void thezeostoken::verifyproof(const string& type, const name& code, const name&
         return first;
     })[0] == '1';
     
-    check(valid, "proof invalid");
+    check(valid, "Proof invalid! Data: " + str);
     //print("Proof verified by ", dsp_count, " DSPs\n\r");
 }
 
