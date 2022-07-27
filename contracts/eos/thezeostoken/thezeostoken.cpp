@@ -5,11 +5,11 @@ thezeostoken::thezeostoken(name self, name code, datastream<const char *> ds) :
 {
 }
 
-void thezeostoken::setvk(const name& code, const name& id, const string& vk)
+void thezeostoken::setvk(const name& code, const name& id, const vector<uint8_t>& vk)
 {
     require_auth(code);
     
-    vks_t vks(get_self(), code.value);
+    vk_t vks(get_self(), code.value);
     auto c = vks.find(id.value);
     
     if(c == vks.end())
@@ -37,16 +37,17 @@ void thezeostoken::setvk(const name& code, const name& id, const string& vk)
     }
 }
 
-void thezeostoken::verifyproof(const name& code, const name& id, const string& proof, const string& inputs)
+void thezeostoken::verifyproof(const string& type, const name& code, const name& id, const string& proof, const string& inputs)
 {
     /* TODO: this check should not be commented out! I only did this because of a DAPP error caused by the transfer key for whatever reason
     PROBABLY BECAUSE OF NOT ENOUGH RAM TO LOAD THE KEY FROM VRAM TO EOS RAM???
-    vks_t vks(get_self(), code.value);
+    vk_t vks(get_self(), code.value);
     auto c = vks.find(id.value);
     check(c != vks.end(), "vk id doesn't exist");
     */
-    // TODO: is it okay to pack 'proof' and 'inputs' as JSON strings into URI? It seems to work here...
     string str = "zeos_verify_proof://";
+    str.append(type);
+    str.append("/");
     str.append(code.to_string());
     str.append("/");
     str.append(id.to_string());
@@ -72,7 +73,7 @@ void thezeostoken::verifyproof(const name& code, const name& id, const string& p
         return first;
     })[0] == '1';
     
-    check(valid, "proof invalid");
+    check(valid, "Proof invalid! Data: " + str);
     //print("Proof verified by ", dsp_count, " DSPs\n\r");
 }
 
@@ -139,10 +140,10 @@ void thezeostoken::mint(const checksum256& epk_s,
     append_bits(bits, a.amount);
     append_bits(bits, a.symbol.raw());
     append_bits(bits, z_a);
-    string inputs = inputs_json(compute_multipacking(bits));
+    string inputs = inputs_hexstr(compute_multipacking(bits));
 
     // verify proof
-    verifyproof(_self, "zeosmintnote"_n, proof, inputs);
+    verifyproof("groth16", _self, "zeosmintnote"_n, proof, inputs);
 
     // burn a from user's balance
     sub_balance(user, a);
@@ -179,7 +180,7 @@ void thezeostoken::ztransfer(const checksum256& epk_s,
     append_bits(bits, z_b);
     append_bits(bits, z_c);
     append_bits(bits, root);
-    string inputs = inputs_json(compute_multipacking(bits));
+    string inputs = inputs_hexstr(compute_multipacking(bits));
 
     // check if root is valid
     check(is_root_valid(root), "root invalid");
@@ -197,7 +198,7 @@ void thezeostoken::ztransfer(const checksum256& epk_s,
     });
     
     // verify proof
-    verifyproof(_self, "transfernote"_n, proof, inputs);
+    verifyproof("groth16", _self, "transfernote"_n, proof, inputs);
     
     // add z_b and z_c to tree
     insert_into_merkle_tree(z_b, false);
@@ -237,7 +238,7 @@ void thezeostoken::burn(const checksum256& epk_s,
     append_bits(bits, b.symbol.raw());
     append_bits(bits, z_c);
     append_bits(bits, root);
-    string inputs = inputs_json(compute_multipacking(bits));
+    string inputs = inputs_hexstr(compute_multipacking(bits));
 
     // check if root is valid
     check(is_root_valid(root), "root invalid");
@@ -255,7 +256,7 @@ void thezeostoken::burn(const checksum256& epk_s,
     });
 
     // verify proof
-    verifyproof(_self, "zeosburnnote"_n, proof, inputs);
+    verifyproof("groth16", _self, "zeosburnnote"_n, proof, inputs);
     
     // add z_c to tree
     insert_into_merkle_tree(z_c, true);

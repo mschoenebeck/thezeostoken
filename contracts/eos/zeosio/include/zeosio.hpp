@@ -26,6 +26,12 @@ namespace zeos
             uint128_t ret = (uint128_t)a - ((uint128_t)b + (uint128_t)(borrow >> 63));
             return tuple<uint64_t, uint64_t>{(uint64_t)ret, (uint64_t)(ret >> 64)};
         }
+        /// Compute a + (b * c) + carry, returning the result and the new carry over.
+        tuple<uint64_t, uint64_t> mac(uint64_t a, uint64_t b, uint64_t c, uint64_t carry)
+        {
+            uint128_t ret = (uint128_t)a + ((uint128_t)b * (uint128_t)c) + (uint128_t)carry;
+            return tuple<uint64_t, uint64_t>{(uint64_t)ret, (uint64_t)(ret >> 64)};
+        }
 
         // copied from zeos-bellman/inc/groth16/bls12_381/scalar.hpp and cpp file to make a header
         // only implementation to be used by smart contracts to compute_multipacking of inputs on chain
@@ -57,6 +63,73 @@ namespace zeos
 
                 Scalar(const vector<uint64_t>& data) : data(data)
                 {
+                }
+
+                vector<uint8_t> to_bytes() const
+                {
+                    // Turn into canonical form by computing
+                    // (a.R) / R = a
+                    Scalar tmp = montgomery_reduce(this->data[0], this->data[1], this->data[2], this->data[3], 0, 0, 0, 0);
+
+                    vector<uint8_t> res = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+                    uint8_t* p = (uint8_t*)tmp.data.data();
+                    // mschoenebeck: the following code probably assumes little endian on the target machine. if target is big endian flip byte order here (UNTESTED)
+                    //res[0..8].copy_from_slice(&tmp.0[0].to_le_bytes());
+                    res[0] = p[0]; res[1] = p[1]; res[2] = p[2]; res[3] = p[3]; res[4] = p[4]; res[5] = p[5]; res[6] = p[6]; res[7] = p[7];
+                    //res[8..16].copy_from_slice(&tmp.0[1].to_le_bytes());
+                    res[8] = p[8]; res[9] = p[9]; res[10] = p[10]; res[11] = p[11]; res[12] = p[12]; res[13] = p[13]; res[14] = p[14]; res[15] = p[15];
+                    //res[16..24].copy_from_slice(&tmp.0[2].to_le_bytes());
+                    res[16] = p[16]; res[17] = p[17]; res[18] = p[18]; res[19] = p[19]; res[20] = p[20]; res[21] = p[21]; res[22] = p[22]; res[23] = p[23];
+                    //res[24..32].copy_from_slice(&tmp.0[3].to_le_bytes());
+                    res[24] = p[24]; res[25] = p[25]; res[26] = p[26]; res[27] = p[27]; res[28] = p[28]; res[29] = p[29]; res[30] = p[30]; res[31] = p[31];
+
+                    return res;
+                }
+
+                Scalar montgomery_reduce(const uint64_t& r0,
+                                         const uint64_t& r1,
+                                         const uint64_t& r2,
+                                         const uint64_t& r3,
+                                         const uint64_t& r4,
+                                         const uint64_t& r5,
+                                         const uint64_t& r6,
+                                         const uint64_t& r7) const
+                {
+                    // The Montgomery reduction here is based on Algorithm 14.32 in
+                    // Handbook of Applied Cryptography
+                    // <http://cacr.uwaterloo.ca/hac/about/chap14.pdf>.
+
+                    uint64_t _, rr0 = r0, rr1 = r1, rr2 = r2, rr3 = r3, rr4 = r4, rr5 = r5, rr6 = r6, rr7 = r7, carry, carry2;
+                    uint64_t k = rr0 * INV;
+                    tie(_,   carry) = mac(rr0, k, MODULUS.data[0], 0);
+                    tie(rr1, carry) = mac(rr1, k, MODULUS.data[1], carry);
+                    tie(rr2, carry) = mac(rr2, k, MODULUS.data[2], carry);
+                    tie(rr3, carry) = mac(rr3, k, MODULUS.data[3], carry);
+                    tie(rr4, carry2) = adc(rr4, 0, carry);
+
+                    k = rr1 * INV;
+                    tie(_,   carry) = mac(rr1, k, MODULUS.data[0], 0);
+                    tie(rr2, carry) = mac(rr2, k, MODULUS.data[1], carry);
+                    tie(rr3, carry) = mac(rr3, k, MODULUS.data[2], carry);
+                    tie(rr4, carry) = mac(rr4, k, MODULUS.data[3], carry);
+                    tie(rr5, carry2) = adc(rr5, carry2, carry);
+
+                    k = rr2 * INV;
+                    tie(_,   carry) = mac(rr2, k, MODULUS.data[0], 0);
+                    tie(rr3, carry) = mac(rr3, k, MODULUS.data[1], carry);
+                    tie(rr4, carry) = mac(rr4, k, MODULUS.data[2], carry);
+                    tie(rr5, carry) = mac(rr5, k, MODULUS.data[3], carry);
+                    tie(rr6, carry2) = adc(rr6, carry2, carry);
+
+                    k = rr3 * INV;
+                    tie(_,   carry) = mac(rr3, k, MODULUS.data[0], 0);
+                    tie(rr4, carry) = mac(rr4, k, MODULUS.data[1], carry);
+                    tie(rr5, carry) = mac(rr5, k, MODULUS.data[2], carry);
+                    tie(rr6, carry) = mac(rr6, k, MODULUS.data[3], carry);
+                    tie(rr7, _) = adc(rr7, carry2, carry);
+
+                    // Result may be within MODULUS of the correct value
+                    return (Scalar(vector<uint64_t>{rr4, rr5, rr6, rr7})).sub(MODULUS);
                 }
 
                 static Scalar zero()
@@ -207,6 +280,52 @@ namespace zeos
             }
 
             res.push_back(']');
+
+            return res;
+        }
+
+        // from: https://stackoverflow.com/a/47526992/2340535
+        // adjusted to C types
+        string BytesArrayToHexString(uint8_t* src)
+        {
+            const uint8_t n = 8;
+            static const char table[] = "0123456789ABCDEF";
+            char dst[2 * n + 1];
+            const uint8_t* srcPtr = src;
+            char* dstPtr = dst;
+            for (auto count = n; count > 0; --count)
+            {
+                unsigned char c = *srcPtr++;
+                *dstPtr++ = table[c >> 4];
+                *dstPtr++ = table[c & 0x0f];
+            }
+            *dstPtr = 0;
+            return &dst[0];
+        }
+
+        string byte2str(const uint8_t b)
+        {
+            static const char table[] = "0123456789ABCDEF";
+            char dst[3];
+            char* dstPtr = dst;
+            *dstPtr++ = table[b >> 4];
+            *dstPtr++ = table[b & 0x0f];
+            *dstPtr = 0;
+            return dst;
+        }
+
+        string inputs_hexstr(const vector<Scalar>& inputs)
+        {
+            string res = byte2str(inputs.size());
+
+            for(int i = 0; i < inputs.size(); i++)
+            {
+                vector<unsigned char> s = inputs[i].to_bytes();
+                for(auto c = s.begin(); c != s.end(); c++)
+                {
+                    res += byte2str(*c);
+                }
+            }
 
             return res;
         }

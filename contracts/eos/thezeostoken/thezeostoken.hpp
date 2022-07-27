@@ -42,16 +42,16 @@ CONTRACT_START()
     };
     
     // verifier keys table
-    TABLE verifierkey
+    TABLE vk
     {
         name id;
-        string vk;
+        vector<uint8_t> vk;
 
         uint64_t primary_key() const { return id.value; }
     };
-    typedef dapp::advanced_multi_index<"verifierkey"_n, verifierkey, uint64_t> vks_t;
-    typedef eosio::multi_index<".verifierkey"_n, verifierkey> vks_t_v_abi;
-    typedef eosio::multi_index<"verifierkey"_n, shardbucket> vks_t_abi;
+    typedef dapp::advanced_multi_index<"vk"_n, vk, uint64_t> vk_t;
+    typedef eosio::multi_index<".vk"_n, vk> vk_t_v_abi;
+    typedef eosio::multi_index<"vk"_n, shardbucket> vk_t_abi;
 
     // zeos private transaction data table
     TABLE transaction_data
@@ -166,10 +166,11 @@ CONTRACT_START()
     // set verifier key
     ACTION setvk(const name& code,
                  const name& id,
-                 const string& vk);
+                 const vector<uint8_t>& vk);
 
     // verify proof
-    ACTION verifyproof(const name& code,
+    ACTION verifyproof(const string& type,
+                       const name& code,
                        const name& id,
                        const string& proof,     
                        const string& inputs);
