@@ -1,4 +1,5 @@
 #pragma once
+#define THEZEOSTOKEN_HEADER_FILE
 
 // comment out to use EOS RAM for merkle tree, tx data and nullifier tables, uncomment to use VRAM
 //#define USE_VRAM
@@ -9,7 +10,7 @@
 #include "../dappservices/ipfs.hpp"
 #include "../dappservices/multi_index.hpp"
 #include "../dappservices/oracle.hpp"
-#include "../zeosio/include/zeosio.hpp"
+#include "../../../../zeosio/include/zeosio.hpp"
 
 using namespace zeos::groth16;
 using namespace eosio;
