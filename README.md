@@ -14,6 +14,14 @@ This contract is built on [EOSIO](https://eos.io/) and [Liquidapps' DAPP Network
 
 ## Getting Started
 
+To setup the full workspace clone the dependency [ZEOSIO](https://github.com/mschoenebeck/zeosio) as well:
+
+```
+mkdir zeos
+cd zeos
+git clone https://github.com/mschoenebeck/zeosio.git
+```
+
 Clone this repository:
 
 ```
