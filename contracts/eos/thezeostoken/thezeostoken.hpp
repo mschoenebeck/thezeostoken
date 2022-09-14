@@ -11,6 +11,7 @@
 #include "../dappservices/multi_index.hpp"
 #include "../dappservices/oracle.hpp"
 #include "../../../../zeosio/include/zeosio.hpp"
+#include <optional>
 
 using namespace zeos::groth16;
 using namespace eosio;
@@ -30,6 +31,19 @@ using namespace std;
 #define TXD_BURN        3
 
 #define CONTRACT_NAME() thezeostoken
+
+// This version of eosio::get_action doesn't abort when index is out of range.
+// Thanks Todd Fleming! https://eoscommunity.github.io/clsdk-docs/book/std/cpay/index.html
+optional<action> better_get_action(uint32_t type, uint32_t index)
+{
+    auto size = internal_use_do_not_use::get_action(type, index, nullptr, 0);
+    if(size < 0)
+        return nullopt;
+    vector<char> raw(size);
+    auto size2 = internal_use_do_not_use::get_action(type, index, raw.data(), size);
+    check(size2 == size, "get_action failed");
+    return unpack<action>(raw.data(), size);
+}
 
 CONTRACT_START()
     
@@ -108,6 +122,28 @@ CONTRACT_START()
     typedef eosio::multi_index<"nfeosram"_n, nullifier> nf_t;
 #endif
 
+    // buffers an entire tx for the time of execution
+    TABLE tx_buffer
+    {
+        uint32_t cur;
+        uint32_t last;
+        vector<action> tx;
+
+        uint64_t primary_key() const { return 0; }
+    };
+    typedef eosio::multi_index<"txbuffer"_n, tx_buffer> txb_t;
+
+    TABLE funds
+    {
+        //checksum256 hash;
+        //extended_asset deposited;
+        string memo;
+
+        //uint64_t primary_key() const { return (uint64_t)*((uint32_t*)hash.extract_as_byte_array().data()); }
+        uint64_t primary_key() const { return 0; }
+    };
+    typedef eosio::multi_index<"funds"_n, funds> funds_t;
+
     TABLE global_stats
     {
         uint64_t id;                    // = 0 for vram, = 1 for eos ram
@@ -176,6 +212,13 @@ CONTRACT_START()
                        const string& proof,     
                        const string& inputs);
 
+    // execute transaction
+    ACTION begin(const vector<action>& tx);
+    ACTION step();
+    ACTION exec(const vector<zaction>& ztx);
+    ACTION inlinesample(const zaction& payload);
+    void ontransfer(name from, name to, asset quantity, string memo);
+
     // init
     ACTION init(const uint64_t& depth);
 
@@ -240,4 +283,26 @@ CONTRACT_START()
     inline asset get_balance(const name& owner,
                              const symbol_code& sym) const;
     
-CONTRACT_END((setvk)(verifyproof)(init)(mint)(ztransfer)(burn)(create)(issue)(retire)(transfer)(open)(close)(xdcommit))
+//CONTRACT_END((setvk)(verifyproof)(begin)(step)(exec)(inlinesample)(init)(mint)(ztransfer)(burn)(create)(issue)(retire)(transfer)(open)(close)(xdcommit))
+};
+
+extern "C"
+{
+    void apply(uint64_t receiver, uint64_t code, uint64_t action)
+    {
+        if(receiver == name("thezeostoken").value && action == name("transfer").value)
+        {
+            execute_action(name(receiver), name(code), &CONTRACT_NAME()::ontransfer);
+        }
+        else
+        {
+            switch(action)
+            {
+                EOSIO_DISPATCH_HELPER(CONTRACT_NAME(), DAPPSERVICE_ACTIONS_COMMANDS())
+                EOSIO_DISPATCH_HELPER(CONTRACT_NAME(), (setvk)(verifyproof)(begin)(step)(exec)(inlinesample)(init)(mint)(ztransfer)(burn)(create)(issue)(retire)(transfer)(open)(close))
+                EOSIO_DISPATCH_HELPER(CONTRACT_NAME(), (xsignal))
+            }
+        }
+        eosio_exit(0);
+    }
+}

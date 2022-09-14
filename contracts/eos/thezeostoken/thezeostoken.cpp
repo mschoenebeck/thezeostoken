@@ -77,6 +77,116 @@ void thezeostoken::verifyproof(const string& type, const name& code, const name&
     //print("Proof verified by ", dsp_count, " DSPs\n\r");
 }
 
+void thezeostoken::begin(const vector<action>& tx)
+{
+    // check for context-free actions and other stuff
+    auto action = better_get_action(0, 0);
+    check(!action, "context-free actions are not allowed");
+    check(tx.size() > 0, "transaction must contain at least one action");
+
+    // make sure the action pattern (begin)(step)(step)... is given with as many steps as 'tx' requires
+    uint32_t begin_index = -1;
+    uint32_t last_step = -1;
+    uint32_t index = 0;
+    for(;; ++index)
+    {
+        auto action = better_get_action(1, index);
+        if(!action)
+            break;
+        if(action->account == "thezeostoken"_n && action->name == "begin"_n)
+        {
+            check(begin_index == -1, "only one 'begin' per transaction");
+            begin_index = index;
+            last_step = index + tx.size();
+        }
+        else if(begin_index >= 0 && index <= last_step)
+        {
+            check(action->account == "thezeostoken"_n && action->name == "step"_n, "not enough 'step' actions after 'begin'");
+        }
+    }
+    check(index > last_step, "not enough 'step' actions after 'begin'");
+
+    // TODO: check for blacklisted txs, collect all public inputs, verify tx proof, add encrypted notes to global list
+    // blacklist: *::transfer, eosio::*
+
+    // copy tx into buffer where it remains only during its execution. The last 'step' frees the buffer.
+    txb_t txb(_self, _self.value);
+    txb.emplace(_self, [&](auto& buffer){
+        buffer.cur = 0;
+        buffer.last = tx.size()-1;
+        buffer.tx = tx;
+    });
+}
+
+void thezeostoken::step()
+{
+    txb_t txb(_self, _self.value);
+    auto buffer = txb.get(0, "need to execute 'begin' action first before first call of 'step' action");
+
+    // execute the action corresponding to this step
+    buffer.tx[buffer.cur].send();
+    // if this action is not from thezeostoken contract execute its zactions (if any)
+    // zactions not belonging to third party contracts are executed via 'exec' in the above call
+    // TODO: if(buffer.tx[buffer.cur].data && buffer.tx[buffer.cur].account.value != "thezeostoken"_n.value)
+    {
+        // TODO: execute the zactions of current action
+        //exec();
+    }
+
+    // clear buffer or increase cur
+    if(buffer.cur == buffer.last)
+    {
+        txb.erase(txb.begin());
+    }
+    else
+    {
+        txb.modify(txb.begin(), _self, [&](auto& buffer){
+            ++buffer.cur;
+        });
+    }
+}
+
+void thezeostoken::exec(const vector<zaction>& ztx)
+{
+    // this action should only be executable by thezeostoken itself and never by third party contracts!
+    // executing the same zactions more than once per proof could be abused
+    require_auth(_self);
+}
+
+void thezeostoken::inlinesample(const zaction& payload)
+{
+    //check(payload.type == 1337, "payload type is != 1337");
+    funds_t fnd(_self, _self.value);
+
+    auto it = fnd.get(0, "nope");
+    check(0, it.memo);
+}
+
+void thezeostoken::ontransfer(name from, name to, asset quantity, string memo)
+{
+    //testins t;t.anchor=checksum256(); t.nft=true; t.b_d1=252;
+    //vector<const halo2::instance*> v; v.push_back(&t);
+    //check(0, halo2::serialize_instances(v));
+    check(0, get_first_receiver().to_string());
+    if(to == _self)
+    {
+        funds_t fnd(_self, _self.value);
+
+        if(fnd.begin() == fnd.end())
+        {
+            fnd.emplace(_self, [&]( auto& row ) {
+                row.memo = memo;
+            });
+        }
+        else
+        {
+            fnd.modify(fnd.begin(), _self, [&](auto& row) {
+                row.memo = memo;
+            });
+        }
+    }
+}
+
 void thezeostoken::init(const uint64_t& depth)
 {
     require_auth(_self);
@@ -92,13 +202,14 @@ void thezeostoken::init(const uint64_t& depth)
     for(auto it = nf.begin(); it != nf.end(); )
         it = nf.erase(it);
     gs_t gs(_self, _self.value);
-//    for(auto it = gs.begin(); it != gs.end(); )
-//        it = gs.erase(it);
+    for(auto it = gs.begin(); it != gs.end(); )
+        it = gs.erase(it);
 #ifdef USE_VRAM
     const uint64_t id = 0;
 #else
     const uint64_t id = 1;
 #endif
+/*
     // reset indices in global stats table
     auto stats = gs.find(id);
     if(stats == gs.end())
@@ -120,6 +231,7 @@ void thezeostoken::init(const uint64_t& depth)
             row.mt_roots = deque<checksum256>();
         });
     }
+*/
 }
 
 // zMint
