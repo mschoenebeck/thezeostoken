@@ -16,8 +16,7 @@
         "npm": {}
     },
     "dependencies": {
-        "oracle-web": "",
-        "storage-dapp-service": "",
-        "ipfs-dapp-service": ""
+        "oracle-zeos": "",
+        "storage-dapp-service": ""
     }
 }
