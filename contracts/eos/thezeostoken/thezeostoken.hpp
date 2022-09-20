@@ -13,7 +13,7 @@
 #include "../../../../zeosio/include/zeosio.hpp"
 #include <optional>
 
-using namespace zeos::groth16;
+using namespace zeosio::groth16;
 using namespace eosio;
 using namespace std;
 
@@ -207,14 +207,14 @@ CONTRACT_START()
     ACTION verifyproof(const string& type,
                        const name& code,
                        const name& id,
-                       const string& proof,     
+                       const string& proof,
                        const string& inputs);
 
     // execute transaction
-    ACTION begin(const vector<action>& tx);
+    ACTION begin(const string& proof, vector<action>& tx);
     ACTION step();
     ACTION exec(const vector<zaction>& ztx);
-    ACTION inlinesample(const zaction& payload);
+    ACTION test22(const vector<zaction>& ztx, const uint64_t& test22);
     void ontransfer(name from, name to, asset quantity, string memo);
 
     // init
@@ -281,7 +281,8 @@ CONTRACT_START()
     inline asset get_balance(const name& owner,
                              const symbol_code& sym) const;
     
-//CONTRACT_END((setvk)(verifyproof)(begin)(step)(exec)(inlinesample)(init)(mint)(ztransfer)(burn)(create)(issue)(retire)(transfer)(open)(close)(xdcommit))
+CONTRACT_END((setvk)(verifyproof)(begin)(step)(exec)(test22)(init)(mint)(ztransfer)(burn)(create)(issue)(retire)(transfer)(open)(close)(xdcommit))
+/*
 };
 
 extern "C"
@@ -297,10 +298,11 @@ extern "C"
             switch(action)
             {
                 EOSIO_DISPATCH_HELPER(CONTRACT_NAME(), DAPPSERVICE_ACTIONS_COMMANDS())
-                EOSIO_DISPATCH_HELPER(CONTRACT_NAME(), (setvk)(verifyproof)(begin)(step)(exec)(inlinesample)(init)(mint)(ztransfer)(burn)(create)(issue)(retire)(transfer)(open)(close))
+                EOSIO_DISPATCH_HELPER(CONTRACT_NAME(), (setvk)(verifyproof)(begin)(step)(exec)(test22)(init)(mint)(ztransfer)(burn)(create)(issue)(retire)(transfer)(open)(close))
                 EOSIO_DISPATCH_HELPER(CONTRACT_NAME(), (xsignal))
             }
         }
         eosio_exit(0);
     }
 }
+*/

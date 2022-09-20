@@ -73,7 +73,16 @@ void thezeostoken::verifyproof(const string& type, const name& code, const name&
     //print("Proof verified by ", dsp_count, " DSPs\n\r");
 }
 
-void thezeostoken::begin(const vector<action>& tx)
+uint64_t dummy_mem[5] = {0xDEADBEEFDEADBEEF, 0xDEADBEEFDEADBEEF, 0xDEADBEEFDEADBEEF, 0xDEADBEEFDEADBEEF, 0xDEADBEEFDEADBEEF};
+inline bool has_exec_zactions(const action* a)
+{
+    return a->data.size() > (1 + sizeof(zaction::type) + ZI_SIZE + 1) &&    // ensure valid access for following checks 
+           0 == memcmp(&a->data[1], dummy_mem, 40) &&                       // 5 times 0xDEADBEEFDEADBEEF check
+           a->data[0] > 1 &&                                                // more zactions than just the dummy?
+           a->data[1 + sizeof(zaction::type) + ZI_SIZE] == 0;               // memo field == ""?;
+}
+
+void thezeostoken::begin(const string& proof, vector<action>& tx)
 {
     // check for context-free actions and other stuff
     auto action = better_get_action(0, 0);
@@ -81,6 +90,7 @@ void thezeostoken::begin(const vector<action>& tx)
     check(tx.size() > 0, "transaction must contain at least one action");
 
     // make sure the action pattern (begin)(step)(step)... is given with as many steps as 'tx' requires
+    // check out: https://eoscommunity.github.io/clsdk-docs/book/std/cpay/index.html
     uint32_t begin_index = -1;
     uint32_t last_step = -1;
     uint32_t index = 0;
@@ -102,8 +112,59 @@ void thezeostoken::begin(const vector<action>& tx)
     }
     check(index > last_step, "not enough 'step' actions after 'begin'");
 
-    // TODO: check for blacklisted txs, collect all public inputs, verify tx proof, add encrypted notes to global list
-    // blacklist: *::transfer, eosio::*
+    // collect public inputs for proof bundle verification and check for blacklisted transactions
+    string inputs = "0B";
+    for(auto a = tx.begin(); a != tx.end(); ++a)
+    {
+        // blacklist all actions with pattern: *::transfer and eosio::*
+        check(a->account != "eosio"_n, "system contract actions are blacklisted!");
+        check(a->name != "transfer"_n, "'transfer' actions are blacklisted!");
+        // TODO: any more accounts/actions that should be blacklisted?
+
+        // in case of dummy_exec zaction collect public inputs (halo2 instances)
+        if(has_exec_zactions(&(*a)))
+        {
+            char i = 1;
+            char* ptr = a->data.data() + 1 + sizeof(zaction::type) + ZI_SIZE + 1 + sizeof(zaction::type);
+            do
+            {
+                inputs.append(byte2str<32>(reinterpret_cast<const uint8_t*>(ptr)));
+                ptr += 32;
+                inputs.append(byte2str<32>(reinterpret_cast<const uint8_t*>(ptr)));
+                ptr += 32;
+                inputs.append(byte2str<32>(reinterpret_cast<const uint8_t*>(ptr)));
+                ptr += 32;
+                inputs.append(byte2str<32>(reinterpret_cast<const uint8_t*>(ptr)));
+                ptr += 32;
+                inputs.append(byte2str<32>(reinterpret_cast<uint8_t*>(halo2::Fp::from_bool(*reinterpret_cast<const bool*>(ptr)).data.data())));
+                ptr += 1;
+                inputs.append(byte2str<32>(reinterpret_cast<uint8_t*>(halo2::Fp::from_u64(*reinterpret_cast<const uint64_t*>(ptr)).data.data())));
+                ptr += 8;
+                inputs.append(byte2str<32>(reinterpret_cast<uint8_t*>(halo2::Fp::from_u64(*reinterpret_cast<const uint64_t*>(ptr)).data.data())));
+                ptr += 8;
+                inputs.append(byte2str<32>(reinterpret_cast<uint8_t*>(halo2::Fp::from_u64(*reinterpret_cast<const uint64_t*>(ptr)).data.data())));
+                ptr += 8;
+                inputs.append(byte2str<32>(reinterpret_cast<uint8_t*>(halo2::Fp::from_u64(*reinterpret_cast<const uint64_t*>(ptr)).data.data())));
+                ptr += 8;
+                inputs.append(byte2str<32>(reinterpret_cast<const uint8_t*>(ptr)));
+                ptr += 32;
+                inputs.append(byte2str<32>(reinterpret_cast<const uint8_t*>(ptr)));
+                ptr += 32;
+
+                ptr += *reinterpret_cast<const uint8_t*>(ptr) + 1 + sizeof(zaction::type);
+                ++i;
+            }
+            while(i < a->data[0]);
+
+            // calculate the size of the entire vector<zactions> in bytes and write it into the dummy struct (lower 64 bit of field 'nf'). This will
+            // make it easy to reduce the size of the 'data' vector of this particular EOSIO 'action' object to pass it as argument to 'exec' in 'step'
+            // function.
+            *reinterpret_cast<size_t*>(&a->data[1 + sizeof(zaction::type) + 32]) = ptr - sizeof(zaction::type) - a->data.data();
+        }
+    }
+
+    // verify proof bundle
+    verifyproof("halo2", "thezeostoken"_n, "zeosorchard1"_n, proof, inputs);
 
     // copy tx into buffer where it remains only during its execution. The last 'step' frees the buffer.
     txb_t txb(_self, _self.value);
@@ -119,14 +180,20 @@ void thezeostoken::step()
     txb_t txb(_self, _self.value);
     auto buffer = txb.get(0, "need to execute 'begin' action first before first call of 'step' action");
 
-    // execute the action corresponding to this step
+    // execute the action (corresponding to the current 'step')
     buffer.tx[buffer.cur].send();
-    // if this action is not from thezeostoken contract execute its zactions (if any)
-    // zactions not belonging to third party contracts are executed via 'exec' in the above call
-    // TODO: if(buffer.tx[buffer.cur].data && buffer.tx[buffer.cur].account.value != "thezeostoken"_n.value)
+
+    // if this action is not thezeostoken::exec execute its zactions (if any)
+    if(!(buffer.tx[buffer.cur].name.value    == "exec"_n.value && 
+         buffer.tx[buffer.cur].account.value == "thezeostoken"_n.value) &&
+       has_exec_zactions(&buffer.tx[buffer.cur]))
     {
-        // TODO: execute the zactions of current action
-        //exec();
+        // Transform current action into an 'exec' action. Call resize() on data to keep only the vector
+        // of zactions for exec as first parameter and cut off all additional params.
+        buffer.tx[buffer.cur].name = "exec"_n;
+        buffer.tx[buffer.cur].account = "thezeostoken"_n;
+        buffer.tx[buffer.cur].data.resize(*reinterpret_cast<const size_t*>(&buffer.tx[buffer.cur].data[1 + sizeof(zaction::type) + 32]));
+        buffer.tx[buffer.cur].send();
     }
 
     // clear buffer or increase cur
@@ -147,15 +214,14 @@ void thezeostoken::exec(const vector<zaction>& ztx)
     // this action should only be executable by thezeostoken itself and never by third party contracts!
     // executing the same zactions more than once per proof could be abused
     require_auth(_self);
+    //check(0, "exec!");
+
 }
 
-void thezeostoken::inlinesample(const zaction& payload)
+void thezeostoken::test22(const vector<zaction>& ztx, const uint64_t& test22)
 {
-    //check(payload.type == 1337, "payload type is != 1337");
-    funds_t fnd(_self, _self.value);
-
-    auto it = fnd.get(0, "nope");
-    check(0, it.memo);
+    require_auth("thezeostoken"_n);
+    check(test22 == 12345, test22);
 }
 
 void thezeostoken::ontransfer(name from, name to, asset quantity, string memo)
