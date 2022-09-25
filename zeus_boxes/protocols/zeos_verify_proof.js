@@ -59,6 +59,10 @@ module.exports = async ({ proto, address }) => {
         res = m.verify_groth16_proof(hex2Bytes(proof_str), hex2Bytes(inputs_str), hex2Bytes(vk_str));
         break;
 
+      case "zeos":
+        res = m.verify_zeos_proof(hex2Bytes(proof_str), hex2Bytes(inputs_str), hex2Bytes(vk_str));
+        break;
+
       default:
         res = false;
         break;

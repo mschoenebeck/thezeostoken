@@ -113,7 +113,7 @@ void thezeostoken::begin(const string& proof, vector<action>& tx)
     check(index > last_step, "not enough 'step' actions after 'begin'");
 
     // collect public inputs for proof bundle verification and check for blacklisted transactions
-    string inputs = "0B";
+    string inputs = "";
     for(auto a = tx.begin(); a != tx.end(); ++a)
     {
         // blacklist all actions with pattern: *::transfer and eosio::*
@@ -128,29 +128,8 @@ void thezeostoken::begin(const string& proof, vector<action>& tx)
             char* ptr = a->data.data() + 1 + sizeof(zaction::type) + ZI_SIZE + 1 + sizeof(zaction::type);
             do
             {
-                inputs.append(byte2str<32>(reinterpret_cast<const uint8_t*>(ptr)));
-                ptr += 32;
-                inputs.append(byte2str<32>(reinterpret_cast<const uint8_t*>(ptr)));
-                ptr += 32;
-                inputs.append(byte2str<32>(reinterpret_cast<const uint8_t*>(ptr)));
-                ptr += 32;
-                inputs.append(byte2str<32>(reinterpret_cast<const uint8_t*>(ptr)));
-                ptr += 32;
-                inputs.append(byte2str<32>(reinterpret_cast<uint8_t*>(halo2::Fp::from_bool(*reinterpret_cast<const bool*>(ptr)).data.data())));
-                ptr += 1;
-                inputs.append(byte2str<32>(reinterpret_cast<uint8_t*>(halo2::Fp::from_u64(*reinterpret_cast<const uint64_t*>(ptr)).data.data())));
-                ptr += 8;
-                inputs.append(byte2str<32>(reinterpret_cast<uint8_t*>(halo2::Fp::from_u64(*reinterpret_cast<const uint64_t*>(ptr)).data.data())));
-                ptr += 8;
-                inputs.append(byte2str<32>(reinterpret_cast<uint8_t*>(halo2::Fp::from_u64(*reinterpret_cast<const uint64_t*>(ptr)).data.data())));
-                ptr += 8;
-                inputs.append(byte2str<32>(reinterpret_cast<uint8_t*>(halo2::Fp::from_u64(*reinterpret_cast<const uint64_t*>(ptr)).data.data())));
-                ptr += 8;
-                inputs.append(byte2str<32>(reinterpret_cast<const uint8_t*>(ptr)));
-                ptr += 32;
-                inputs.append(byte2str<32>(reinterpret_cast<const uint8_t*>(ptr)));
-                ptr += 32;
-
+                inputs.append(byte2str<ZI_SIZE>(reinterpret_cast<const uint8_t*>(ptr)));
+                ptr += ZI_SIZE;
                 ptr += *reinterpret_cast<const uint8_t*>(ptr) + 1 + sizeof(zaction::type);
                 ++i;
             }
@@ -164,7 +143,7 @@ void thezeostoken::begin(const string& proof, vector<action>& tx)
     }
 
     // verify proof bundle
-    verifyproof("halo2", "thezeostoken"_n, "zeosorchard1"_n, proof, inputs);
+    verifyproof("zeos", "thezeostoken"_n, "zeosorchard1"_n, proof, inputs);
 
     // copy tx into buffer where it remains only during its execution. The last 'step' frees the buffer.
     txb_t txb(_self, _self.value);
@@ -215,6 +194,16 @@ void thezeostoken::exec(const vector<zaction>& ztx)
     // executing the same zactions more than once per proof could be abused
     require_auth(_self);
     //check(0, "exec!");
+
+    for(auto it = ztx.begin(); it != ztx.end(); ++it)
+    {
+        switch(it->type)
+        {
+            case ZA_DUMMY:
+            case ZA_NULL:
+                break;
+        }
+    }
 
 }
 
