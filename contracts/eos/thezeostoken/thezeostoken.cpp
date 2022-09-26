@@ -1,7 +1,10 @@
 #include "thezeostoken.hpp"
 
 thezeostoken::thezeostoken(name self, name code, datastream<const char *> ds) :
-    contract(self, code, ds)
+    contract(self, code, ds),
+    txb(_self, _self.value),
+    ftb(_self, _self.value),
+    global(_self, _self.value)
 {
 }
 
@@ -128,7 +131,11 @@ void thezeostoken::begin(const string& proof, vector<action>& tx)
             char* ptr = a->data.data() + 1 + sizeof(zaction::type) + ZI_SIZE + 1 + sizeof(zaction::type);
             do
             {
-                inputs.append(byte2str<ZI_SIZE>(reinterpret_cast<const uint8_t*>(ptr)));
+                // don't collect inputs if zaction type is ZA_MINTAUTH because it does not require a zero knowledge proof
+                if(ZA_MINTAUTH != *reinterpret_cast<const uint64_t*>(ptr - sizeof(zaction::type)))
+                {
+                    inputs.append(byte2str<ZI_SIZE>(reinterpret_cast<const uint8_t*>(ptr)));
+                }
                 ptr += ZI_SIZE;
                 ptr += *reinterpret_cast<const uint8_t*>(ptr) + 1 + sizeof(zaction::type);
                 ++i;
@@ -142,49 +149,48 @@ void thezeostoken::begin(const string& proof, vector<action>& tx)
         }
     }
 
-    // verify proof bundle
-    verifyproof("zeos", "thezeostoken"_n, "zeosorchard1"_n, proof, inputs);
+    // verify proof bundle if some public inputs have been found
+    if(inputs.length() > 0)
+    {
+        verifyproof("zeos", "thezeostoken"_n, "zeosorchard1"_n, proof, inputs);
+    }
 
-    // copy tx into buffer where it remains only during its execution. The last 'step' frees the buffer.
-    txb_t txb(_self, _self.value);
-    txb.emplace(_self, [&](auto& buffer){
-        buffer.cur = 0;
-        buffer.last = tx.size()-1;
-        buffer.tx = tx;
-    });
+    // TODO: add encrypted notes to tx_data list
+    // TODO check num of enc notes is not more than what counted in loop above (TODO)
+
+    // copy tx into singleton buffer where it remains only during its execution. The last 'step' frees the buffer.
+    txb.set({0, tx.size()-1, tx}, _self);
 }
 
 void thezeostoken::step()
 {
-    txb_t txb(_self, _self.value);
-    auto buffer = txb.get(0, "need to execute 'begin' action first before first call of 'step' action");
-
     // execute the action (corresponding to the current 'step')
-    buffer.tx[buffer.cur].send();
+    auto b = txb.get();
+    b.tx[b.cur].send();
 
     // if this action is not thezeostoken::exec execute its zactions (if any)
-    if(!(buffer.tx[buffer.cur].name.value    == "exec"_n.value && 
-         buffer.tx[buffer.cur].account.value == "thezeostoken"_n.value) &&
-       has_exec_zactions(&buffer.tx[buffer.cur]))
+    if(!(b.tx[b.cur].name.value    == "exec"_n.value && 
+         b.tx[b.cur].account.value == "thezeostoken"_n.value) &&
+       has_exec_zactions(&b.tx[b.cur]))
     {
         // Transform current action into an 'exec' action. Call resize() on data to keep only the vector
         // of zactions for exec as first parameter and cut off all additional params.
-        buffer.tx[buffer.cur].name = "exec"_n;
-        buffer.tx[buffer.cur].account = "thezeostoken"_n;
-        buffer.tx[buffer.cur].data.resize(*reinterpret_cast<const size_t*>(&buffer.tx[buffer.cur].data[1 + sizeof(zaction::type) + 32]));
-        buffer.tx[buffer.cur].send();
+        b.tx[b.cur].name = "exec"_n;
+        b.tx[b.cur].account = "thezeostoken"_n;
+        b.tx[b.cur].data.resize(*reinterpret_cast<const size_t*>(&b.tx[b.cur].data[1 + sizeof(zaction::type) + 32]));
+        b.tx[b.cur].send();
     }
 
     // clear buffer or increase cur
-    if(buffer.cur == buffer.last)
+    if(b.cur == b.last)
     {
-        txb.erase(txb.begin());
+        txb.remove();
     }
     else
     {
-        txb.modify(txb.begin(), _self, [&](auto& buffer){
-            ++buffer.cur;
-        });
+        b = txb.get();
+        ++b.cur;
+        txb.set(b, _self);
     }
 }
 
@@ -195,14 +201,132 @@ void thezeostoken::exec(const vector<zaction>& ztx)
     require_auth(_self);
     //check(0, "exec!");
 
-    for(auto it = ztx.begin(); it != ztx.end(); ++it)
+    checksum256 root;
+    bool root_dirty = false;
+    for(auto za = ztx.begin(); za != ztx.end(); ++za)
     {
-        switch(it->type)
+        switch(za->type)
         {
             case ZA_DUMMY:
             case ZA_NULL:
+            case ZA_MINTAUTH:
+            default:
+            {
+                // no merkle tree/nf operations required
                 break;
+            }
+
+            case ZA_MINTFT:
+            {
+                // TODO all the other checks for TRANSFERFT (ZEOS Book)
+                auto funds = ftb.get();
+                check(za->ins.b_d1 == funds.quantity.quantity.amount, "ZA_MINTFT: wrong amount");
+                check(za->ins.b_d2 == funds.quantity.quantity.symbol.raw(), "ZA_MINTFT: wrong symbol");
+                check(za->ins.b_sc == funds.quantity.contract.value, "ZA_MINTFT: wrong contract");
+                // add new leaves to merkle tree
+                root = insert_into_merkle_tree(za->ins.cmb);
+                root_dirty = true;
+                // clear buffer
+                ftb.remove();
+                break;
+            }
+            
+            case ZA_MINTNFT:
+            {
+                // TODO
+                break;
+            }
+            
+            case ZA_TRANSFERFT:
+            {
+                // check if root is valid
+                check(is_root_valid(za->ins.anchor), "ZA_TRANSFERFT: root invalid");
+                // TODO all the other checks for TRANSFERFT (ZEOS Book)
+                // check if nullifier already exists in list, if not add it
+                nf_t nf(_self, _self.value);
+                auto it = nf.find((uint64_t)*((uint32_t*)za->ins.nf.extract_as_byte_array().data()));
+                check(it == nf.end(), "ZA_TRANSFERFT: nullifier exists => note has been spent already");
+                nf.emplace(_self, [&](auto& n) {
+                    n.val = za->ins.nf;
+                });
+                // add new leaves to merkle tree
+                insert_into_merkle_tree(za->ins.cmb);
+                root = insert_into_merkle_tree(za->ins.cmc);
+                root_dirty = true;
+                break;
+            }
+            
+            case ZA_TRANSFERNFT:
+            {
+                // TODO
+                break;
+            }
+            
+            case ZA_BURNFT:
+            {
+                // check if root is valid
+                check(is_root_valid(za->ins.anchor), "ZA_BURNFT: root invalid");
+                // TODO all the other checks for BURNFT (ZEOS Book)
+                // check if nullifier already exists in list, if not add it
+                nf_t nf(_self, _self.value);
+                auto it = nf.find((uint64_t)*((uint32_t*)za->ins.nf.extract_as_byte_array().data()));
+                check(it == nf.end(), "ZA_BURNFT: nullifier exists => note has been spent already");
+                nf.emplace(_self, [&](auto& n) {
+                    n.val = za->ins.nf;
+                });
+                // payout b to user account
+                // TODO
+                // add new leaves to merkle tree
+                root = insert_into_merkle_tree(za->ins.cmc);
+                root_dirty = true;
+                break;
+            }
+            
+            case ZA_BURNFT2:
+            {
+                // check if root is valid
+                check(is_root_valid(za->ins.anchor), "ZA_BURNFT: root invalid");
+                // TODO all the other checks for BURNFT2 (ZEOS Book)
+                // check if nullifier already exists in list, if not add it
+                nf_t nf(_self, _self.value);
+                auto it = nf.find((uint64_t)*((uint32_t*)za->ins.nf.extract_as_byte_array().data()));
+                check(it == nf.end(), "ZA_BURNFT: nullifier exists => note has been spent already");
+                nf.emplace(_self, [&](auto& n) {
+                    n.val = za->ins.nf;
+                });
+                // payout b to user account
+                // TODO
+                // payout c to user account
+                // TODO
+                break;
+            }
+            
+            case ZA_BURNNFT:
+            {
+                // TODO
+                break;
+            }
+            
+            case ZA_BURNAUTH:
+            {
+                // TODO
+                break;
+            }
         }
+    }
+
+    // update list of roots if necessary
+    if(root_dirty)
+    {
+        // update global stats
+        auto stats = global.get();
+        stats.mt_roots.push_front(root);
+        // only memorize the most recent x number of root nodes
+        if(stats.mt_roots.size() > G_ROOTS_FIFO_SIZE)
+        {
+            stats.mt_roots.pop_back();
+        }
+        global.set(stats, _self);
     }
 
 }
@@ -213,28 +337,12 @@ void thezeostoken::test22(const vector<zaction>& ztx, const uint64_t& test22)
     check(test22 == 12345, test22);
 }
 
-void thezeostoken::ontransfer(name from, name to, asset quantity, string memo)
+void thezeostoken::onfttransfer(name from, name to, asset quantity, string memo)
 {
-    //testins t;t.anchor=checksum256(); t.nft=true; t.b_d1=252;
-    //vector<const halo2::instance*> v; v.push_back(&t);
-    //check(0, halo2::serialize_instances(v));
-    check(0, get_first_receiver().to_string());
     if(to == _self)
     {
-        funds_t fnd(_self, _self.value);
-
-        if(fnd.begin() == fnd.end())
-        {
-            fnd.emplace(_self, [&]( auto& row ) {
-                row.memo = memo;
-            });
-        }
-        else
-        {
-            fnd.modify(fnd.begin(), _self, [&](auto& row) {
-                row.memo = memo;
-            });
-        }
+        // buffer quantity & owner contract
+        ftb.set({extended_asset(quantity, get_first_receiver())}, _self);
     }
 }
 
@@ -242,201 +350,19 @@ void thezeostoken::init(const uint64_t& depth)
 {
     require_auth(_self);
 
-    // empty all tables (txd, mt, nf)
-    txd_t txd(_self, _self.value);
-    for(auto it = txd.begin(); it != txd.end(); )
-        it = txd.erase(it);
+    // empty all tables (notes, mt, nf)
+    enc_notes_t notes(_self, _self.value);
+    for(auto it = notes.begin(); it != notes.end(); )
+        it = notes.erase(it);
     mt_t mt(_self, _self.value);
     for(auto it = mt.begin(); it != mt.end(); )
         it = mt.erase(it);
     nf_t nf(_self, _self.value);
     for(auto it = nf.begin(); it != nf.end(); )
         it = nf.erase(it);
-    gs_t gs(_self, _self.value);
-    for(auto it = gs.begin(); it != gs.end(); )
-        it = gs.erase(it);
-#ifdef USE_VRAM
-    const uint64_t id = 0;
-#else
-    const uint64_t id = 1;
-#endif
-/*
-    // reset indices in global stats table
-    auto stats = gs.find(id);
-    if(stats == gs.end())
-    {
-        gs.emplace(_self, [&](auto& row){
-            row.id = id;
-            row.tx_count = 0;
-            row.mt_leaf_count = 0;
-            row.mt_depth = depth;
-            row.mt_roots = deque<checksum256>();
-        });
-    }
-    else
-    {
-        gs.modify(stats, _self, [&](auto& row){
-            row.tx_count = 0;
-            row.mt_leaf_count = 0;
-            row.mt_depth = depth;
-            row.mt_roots = deque<checksum256>();
-        });
-    }
-*/
-}
-
-// zMint
-void thezeostoken::mint(const checksum256& epk_s,
-                        const vector<uint128_t>& ciphertext_s,
-                        const checksum256& epk_r,
-                        const vector<uint128_t>& ciphertext_r,
-                        const string& proof,
-                        const asset& a,
-                        const checksum256& z_a,
-                        const name& user)
-{
-    require_auth(user);
-    check(a.amount >= 0, "a.amount invalid");
-
-    // pack inputs in same order as in the arithmetic circuit: amt_a, sym_a, z_a
-    vector<bool> bits;
-    append_bits(bits, a.amount);
-    append_bits(bits, a.symbol.raw());
-    append_bits(bits, z_a);
-    string inputs = inputs_hexstr(compute_multipacking(bits));
-
-    // verify proof
-    verifyproof("groth16", _self, "zeosmintnote"_n, proof, inputs);
-
-    // burn a from user's balance
-    sub_balance(user, a);
-
-    // add z_a to tree
-    insert_into_merkle_tree(z_a, true);
-
-    gs_t gs(_self, _self.value);
-#ifdef USE_VRAM
-    auto stats = gs.find(0);
-#else
-    auto stats = gs.find(1);
-#endif
-    check(stats != gs.end(), "global stats table not initialized");
-
-    // add tx data
-    add_txdata_to_list(TXD_MINT, stats->mt_leaf_count-1, epk_s, ciphertext_s, epk_r, ciphertext_r);
-}
-
-// zTransfer
-void thezeostoken::ztransfer(const checksum256& epk_s,
-                             const vector<uint128_t>& ciphertext_s,
-                             const checksum256& epk_r,
-                             const vector<uint128_t>& ciphertext_r,
-                             const string& proof,
-                             const checksum256& nf_a,
-                             const checksum256& z_b,
-                             const checksum256& z_c,
-                             const checksum256& root)
-{
-    // pack inputs in same order as in the arithmetic circuit: nf_a, z_b, z_c, root
-    vector<bool> bits;
-    append_bits(bits, nf_a);
-    append_bits(bits, z_b);
-    append_bits(bits, z_c);
-    append_bits(bits, root);
-    string inputs = inputs_hexstr(compute_multipacking(bits));
-
-    // check if root is valid
-    check(is_root_valid(root), "root invalid");
-
-    // check if nullifier already exists in list, if not add it
-    nf_t nf(_self, _self.value);
-#ifdef USE_VRAM
-    auto it = nf.find(nf_a);
-#else
-    auto it = nf.find((uint64_t)*((uint32_t*)nf_a.extract_as_byte_array().data()));
-#endif
-    check(it == nf.end(), "nullifier exists => note has been spent already");
-    nf.emplace(_self, [&](auto& n) {
-        n.val = nf_a;
-    });
     
-    // verify proof
-    verifyproof("groth16", _self, "transfernote"_n, proof, inputs);
-    
-    // add z_b and z_c to tree
-    insert_into_merkle_tree(z_b, false);
-    insert_into_merkle_tree(z_c, true);
-
-    gs_t gs(_self, _self.value);
-#ifdef USE_VRAM
-    auto stats = gs.find(0);
-#else
-    auto stats = gs.find(1);
-#endif
-    check(stats != gs.end(), "global stats table not initialized");
-
-    // add tx data
-    add_txdata_to_list(TXD_ZTRANSFER, stats->mt_leaf_count-2, epk_s, ciphertext_s, epk_r, ciphertext_r);
-}
-
-// zBurn
-void thezeostoken::burn(const checksum256& epk_s,
-                        const vector<uint128_t>& ciphertext_s,
-                        const checksum256& epk_r,
-                        const vector<uint128_t>& ciphertext_r,
-                        const string& proof,
-                        const checksum256& nf_a,
-                        const asset& b,
-                        const checksum256& z_c,
-                        const checksum256& root,
-                        const name& user)
-{
-    // NOTE: uncomment if users should only be able to withdraw to their own EOS account, not to someone else's
-    //require_auth(user);
-
-    // pack inputs in same order as in the arithmetic circuit: nf_a, amt_b, sym_b, z_c, root
-    vector<bool> bits;
-    append_bits(bits, nf_a);
-    append_bits(bits, b.amount);
-    append_bits(bits, b.symbol.raw());
-    append_bits(bits, z_c);
-    append_bits(bits, root);
-    string inputs = inputs_hexstr(compute_multipacking(bits));
-
-    // check if root is valid
-    check(is_root_valid(root), "root invalid");
-
-    // check if nullifier already exists in list, if not add it
-    nf_t nf(_self, _self.value);
-#ifdef USE_VRAM
-    auto it = nf.find(nf_a);
-#else
-    auto it = nf.find((uint64_t)*((uint32_t*)nf_a.extract_as_byte_array().data()));
-#endif
-    check(it ==  nf.end(), "nullifier exists => note has been spent already");
-    nf.emplace(_self, [&](auto& n) {
-        n.val = nf_a;
-    });
-
-    // verify proof
-    verifyproof("groth16", _self, "zeosburnnote"_n, proof, inputs);
-    
-    // add z_c to tree
-    insert_into_merkle_tree(z_c, true);
-
-    // mint b to user's balance
-    add_balance(user, b, user);
-
-    gs_t gs(_self, _self.value);
-#ifdef USE_VRAM
-    auto stats = gs.find(0);
-#else
-    auto stats = gs.find(1);
-#endif
-    check(stats != gs.end(), "global stats table not initialized");
-
-    // add tx data
-    add_txdata_to_list(TXD_BURN, stats->mt_leaf_count-1, epk_s, ciphertext_s, epk_r, ciphertext_r);
+    // reset global stats table
+    global.set({0, 0, depth, deque<checksum256>()}, _self);
 }
 
 void thezeostoken::create(const name& issuer, const asset& maximum_supply)
@@ -621,22 +547,15 @@ asset thezeostoken::get_balance(const name& owner, const symbol_code& sym) const
 #define MT_ARR_LEAF_ROW_OFFSET(d) ((1<<(d)) - 1)
 #define MT_ARR_FULL_TREE_OFFSET(d) ((1<<((d)+1)) - 1)
 #define MT_NUM_LEAVES(d) (1<<(d))
-#define GS_ROOTS_FIFO_SIZE 32
-void thezeostoken::insert_into_merkle_tree(const checksum256& val, const bool& add_root_to_list)
+checksum256 thezeostoken::insert_into_merkle_tree(const checksum256& val)
 {
     // fetch global stats
-    gs_t gs(_self, _self.value);
-#ifdef USE_VRAM
-    auto stats = gs.find(0);
-#else
-    auto stats = gs.find(1);
-#endif
-    check(stats != gs.end(), "global stats table not initialized");
+    auto stats = global.get();
 
     // calculate array index of next free leaf in >local< tree
-    uint64_t idx = MT_ARR_LEAF_ROW_OFFSET(stats->mt_depth) + stats->mt_leaf_count % MT_NUM_LEAVES(stats->mt_depth);
+    uint64_t idx = MT_ARR_LEAF_ROW_OFFSET(stats.mt_depth) + stats.mt_leaf_count % MT_NUM_LEAVES(stats.mt_depth);
     // calculate tree offset to translate array indices of >local< tree to global array indices
-    uint64_t tos = stats->mt_leaf_count / MT_NUM_LEAVES(stats->mt_depth) /*=tree_idx*/ * MT_ARR_FULL_TREE_OFFSET(stats->mt_depth);
+    uint64_t tos = stats.mt_leaf_count / MT_NUM_LEAVES(stats.mt_depth) /*=tree_idx*/ * MT_ARR_FULL_TREE_OFFSET(stats.mt_depth);
 
     // insert val into leaf
     mt_t tree(_self, _self.value);
@@ -646,7 +565,7 @@ void thezeostoken::insert_into_merkle_tree(const checksum256& val, const bool& a
     });
 
     // calculate merkle path up to root
-    for(int d = stats->mt_depth; d > 0; d--)
+    for(int d = stats.mt_depth; d > 0; d--)
     {
         // if array index of node is uneven it is always the left child
         bool is_left_child = 1 == idx % 2;
@@ -692,19 +611,11 @@ void thezeostoken::insert_into_merkle_tree(const checksum256& val, const bool& a
         }
     }
     
-    // update global stats: increment leaf index, add new root to FIFO
-    gs.modify(stats, _self, [&](auto& row) {
-        row.mt_leaf_count++;
-        if(add_root_to_list)
-        {
-            row.mt_roots.push_front(tree.get(tos).val);
-            // only memorize the most recent x number of root nodes
-            if(row.mt_roots.size() > GS_ROOTS_FIFO_SIZE)
-            {
-                row.mt_roots.pop_back();
-            }
-        }
-    });
+    // update global stats
+    ++stats.mt_leaf_count;
+    global.set(stats, _self);
+
+    return tree.get(tos).val;
 }
 
 bool thezeostoken::is_root_valid(const checksum256& root)
@@ -713,15 +624,9 @@ bool thezeostoken::is_root_valid(const checksum256& root)
     // of the most recent roots of the current merkle tree
     
     // check if root is in deque of most recent roots
-    gs_t gs(_self, _self.value);
-#ifdef USE_VRAM
-    auto stats = gs.find(0);
-#else
-    auto stats = gs.find(1);
-#endif
-    check(stats != gs.end(), "global stats table not initialized");
+    auto stats = global.get();
 
-    for(auto r = stats->mt_roots.begin(); r != stats->mt_roots.end(); ++r)
+    for(auto r = stats.mt_roots.begin(); r != stats.mt_roots.end(); ++r)
     {
         if(*r == root)
         {
@@ -730,13 +635,13 @@ bool thezeostoken::is_root_valid(const checksum256& root)
     }
     
     // check roots of previous, full merkle trees (tree_index > 0)
-    uint64_t tree_idx = stats->mt_leaf_count / MT_NUM_LEAVES(stats->mt_depth);
+    uint64_t tree_idx = stats.mt_leaf_count / MT_NUM_LEAVES(stats.mt_depth);
 
     mt_t tree(_self, _self.value);
     for(uint64_t t = 0; t < tree_idx; ++t)
     {
         // can use get here because root must exist if this tree has a leaf
-        auto it = tree.get(t * MT_ARR_FULL_TREE_OFFSET(stats->mt_depth));
+        auto it = tree.get(t * MT_ARR_FULL_TREE_OFFSET(stats.mt_depth));
         
         if(it.val == root)
         {
@@ -747,33 +652,3 @@ bool thezeostoken::is_root_valid(const checksum256& root)
     // root was not found
     return false;
 }
-
-void thezeostoken::add_txdata_to_list(const uint8_t& type,
-                                      const uint64_t& mt_leaf_count,
-                                      const checksum256& epk_s,
-                                      const vector<uint128_t>& ciphertext_s,
-                                      const checksum256& epk_r,
-                                      const vector<uint128_t>& ciphertext_r)
-{
-    gs_t gs(_self, _self.value);
-    txd_t txd(_self, _self.value);
-#ifdef USE_VRAM
-    auto stats = gs.find(0);
-#else
-    auto stats = gs.find(1);
-#endif
-    check(stats != gs.end(), "global stats table not initialized");
-    txd.emplace(_self, [&](auto& tx) {
-        tx.id = stats->tx_count;
-        tx.type = type;
-        tx.mt_leaf_count = mt_leaf_count;
-        tx.epk_s = epk_s;
-        tx.ciphertext_s = ciphertext_s;
-        tx.epk_r = epk_r;
-        tx.ciphertext_r = ciphertext_r;
-    });
-    gs.modify(stats, _self, [&](auto& row) {
-        row.tx_count++;
-    });
-}
-

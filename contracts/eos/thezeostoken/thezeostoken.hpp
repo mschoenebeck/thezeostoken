@@ -26,9 +26,7 @@ using namespace std;
     IPFS_SVC_COMMANDS() \
     ORACLE_SVC_COMMANDS()
 
-#define TXD_MINT        1
-#define TXD_ZTRANSFER   2
-#define TXD_BURN        3
+#define G_ROOTS_FIFO_SIZE 32
 
 #define CONTRACT_NAME() thezeostoken
 
@@ -66,29 +64,25 @@ CONTRACT_START()
     };
     typedef eosio::multi_index<"vk"_n, vk> vk_t;
 
-    // zeos private transaction data table
-    TABLE transaction_data
+    // encrypted notes table
+    TABLE enc_note
     {
-        uint64_t id;
-        uint8_t type;
-        uint64_t mt_leaf_count;
-        checksum256 epk_s;
-        vector<uint128_t> ciphertext_s;
-        checksum256 epk_r;
-        vector<uint128_t> ciphertext_r;
+        uint64_t idx;
+        string ciphertext;
+        uint64_t block_num;
         
-        uint64_t primary_key() const { return id; }
+        uint64_t primary_key() const { return idx; }
     };
 #ifdef USE_VRAM
-    typedef dapp::advanced_multi_index<"txd"_n, transaction_data, uint64_t> txd_t;
-    typedef eosio::multi_index<".txd"_n, transaction_data> txd_t_v_abi;
-    typedef eosio::multi_index<"txd"_n, shardbucket> txd_t_abi;
+    typedef dapp::advanced_multi_index<"notes"_n, enc_note, uint64_t> enc_notes_t;
+    typedef eosio::multi_index<".notes"_n, enc_note> notes_t_v_abi;
+    typedef eosio::multi_index<"notes"_n, shardbucket> notes_t_abi;
 #else
-    typedef eosio::multi_index<"txdeosram"_n, transaction_data> txd_t;
+    typedef eosio::multi_index<"noteseosram"_n, enc_note> enc_notes_t;
 #endif
 
     // zeos note commitments merkle tree table
-    TABLE merkle_tree
+    TABLE merkle_node
     {
         uint64_t idx;
         checksum256 val;
@@ -96,17 +90,18 @@ CONTRACT_START()
         uint64_t primary_key() const { return idx; }
     };
 #ifdef USE_VRAM
-    typedef dapp::advanced_multi_index<"mt"_n, merkle_tree, uint64_t> mt_t;
-    typedef eosio::multi_index<".mt"_n, merkle_tree> mt_t_v_abi;
+    typedef dapp::advanced_multi_index<"mt"_n, merkle_node, uint64_t> mt_t;
+    typedef eosio::multi_index<".mt"_n, merkle_node> mt_t_v_abi;
     typedef eosio::multi_index<"mt"_n, shardbucket> mt_t_abi;
 #else
-    typedef eosio::multi_index<"mteosram"_n, merkle_tree> mt_t;
+    typedef eosio::multi_index<"mteosram"_n, merkle_node> mt_t;
 #endif
 
     // zeos nullifier table
     TABLE nullifier
     {
         checksum256 val;
+        uint64_t block_num;
 #ifdef USE_VRAM
         checksum256 primary_key() const { return val; }
     };
@@ -123,36 +118,30 @@ CONTRACT_START()
     // buffers an entire tx for the time of execution
     TABLE tx_buffer
     {
-        uint32_t cur;
-        uint32_t last;
+        size_t cur;
+        size_t last;
         vector<action> tx;
-
-        uint64_t primary_key() const { return 0; }
     };
-    typedef eosio::multi_index<"txbuffer"_n, tx_buffer> txb_t;
+    using txb_t = singleton<"txbuffer"_n, tx_buffer>;
+    txb_t txb;
 
-    TABLE funds
+    // buffers a quantity of fungible tokens
+    TABLE ft_buffer
     {
-        //checksum256 hash;
-        //extended_asset deposited;
-        string memo;
-
-        //uint64_t primary_key() const { return (uint64_t)*((uint32_t*)hash.extract_as_byte_array().data()); }
-        uint64_t primary_key() const { return 0; }
+        extended_asset quantity;
     };
-    typedef eosio::multi_index<"funds"_n, funds> funds_t;
+    using ftb_t = singleton<"ftbuffer"_n, ft_buffer>;
+    ftb_t ftb;
 
-    TABLE global_stats
+    TABLE global
     {
-        uint64_t id;                    // = 0 for vram, = 1 for eos ram
-        uint64_t tx_count;              // number of private transactions
+        uint64_t note_count;            // number of encrypted notes
         uint64_t mt_leaf_count;         // number of merkle tree leaves
         uint64_t mt_depth;              // merkle tree depth
         deque<checksum256> mt_roots;    // stores the most recent roots defined by MTS_NUM_ROOTS. the current root is always the first element
-
-        uint64_t primary_key() const { return id; }
     };
-    typedef eosio::multi_index<"globalstats"_n, global_stats> gs_t;
+    using g_t = singleton<"global"_n, global>;
+    g_t global;
 
     // token contract tables
     TABLE account
@@ -180,17 +169,9 @@ CONTRACT_START()
                      const asset& value,
                      const name& ram_payer);
     
-    void insert_into_merkle_tree(const checksum256& val,
-                                 const bool& add_root_to_list);
+    checksum256 insert_into_merkle_tree(const checksum256& val);
     
     bool is_root_valid(const checksum256& root);
-
-    void add_txdata_to_list(const uint8_t& type,
-                            const uint64_t& mt_leaf_count,
-                            const checksum256& epk_s,
-                            const vector<uint128_t>& ciphertext_s,
-                            const checksum256& epk_r,
-                            const vector<uint128_t>& ciphertext_r);
 
     public:
 
@@ -215,43 +196,10 @@ CONTRACT_START()
     ACTION step();
     ACTION exec(const vector<zaction>& ztx);
     ACTION test22(const vector<zaction>& ztx, const uint64_t& test22);
-    void ontransfer(name from, name to, asset quantity, string memo);
+    void onfttransfer(name from, name to, asset quantity, string memo);
 
     // init
     ACTION init(const uint64_t& depth);
-
-    // Mint
-    ACTION mint(const checksum256& epk_s,
-                const vector<uint128_t>& ciphertext_s,
-                const checksum256& epk_r,
-                const vector<uint128_t>& ciphertext_r,
-                const string& proof,
-                const asset& a,
-                const checksum256& z_a,
-                const name& user);
-
-    // zTransfer
-    ACTION ztransfer(const checksum256& epk_s,
-                     const vector<uint128_t>& ciphertext_s,
-                     const checksum256& epk_r,
-                     const vector<uint128_t>& ciphertext_r,
-                     const string& proof,
-                     const checksum256& nf_a,
-                     const checksum256& z_b,
-                     const checksum256& z_c,
-                     const checksum256& root);
-
-    // Burn
-    ACTION burn(const checksum256& epk_s,
-                const vector<uint128_t>& ciphertext_s,
-                const checksum256& epk_r,
-                const vector<uint128_t>& ciphertext_r,
-                const string& proof,
-                const checksum256& nf_a,
-                const asset& b,
-                const checksum256& z_c,
-                const checksum256& root,
-                const name& user);
 
     // token contract actions
     ACTION create(const name& issuer,
@@ -281,7 +229,7 @@ CONTRACT_START()
     inline asset get_balance(const name& owner,
                              const symbol_code& sym) const;
     
-CONTRACT_END((setvk)(verifyproof)(begin)(step)(exec)(test22)(init)(mint)(ztransfer)(burn)(create)(issue)(retire)(transfer)(open)(close)(xdcommit))
+CONTRACT_END((setvk)(verifyproof)(begin)(step)(exec)(test22)(init)(create)(issue)(retire)(transfer)(open)(close)(xdcommit))
 /*
 };
 
@@ -298,7 +246,7 @@ extern "C"
             switch(action)
             {
                 EOSIO_DISPATCH_HELPER(CONTRACT_NAME(), DAPPSERVICE_ACTIONS_COMMANDS())
-                EOSIO_DISPATCH_HELPER(CONTRACT_NAME(), (setvk)(verifyproof)(begin)(step)(exec)(test22)(init)(mint)(ztransfer)(burn)(create)(issue)(retire)(transfer)(open)(close))
+                EOSIO_DISPATCH_HELPER(CONTRACT_NAME(), (setvk)(verifyproof)(begin)(step)(exec)(test22)(init)(create)(issue)(retire)(transfer)(open)(close))
                 EOSIO_DISPATCH_HELPER(CONTRACT_NAME(), (xsignal))
             }
         }
