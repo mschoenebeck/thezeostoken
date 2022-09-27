@@ -201,7 +201,7 @@ void thezeostoken::exec(const vector<zaction>& ztx)
     require_auth(_self);
     //check(0, "exec!");
 
-    checksum256 root;
+    Fp root;
     bool root_dirty = false;
     for(auto za = ztx.begin(); za != ztx.end(); ++za)
     {
@@ -362,7 +362,7 @@ void thezeostoken::init(const uint64_t& depth)
         it = nf.erase(it);
     
     // reset global stats table
-    global.set({0, 0, depth, deque<checksum256>()}, _self);
+    global.set({0, 0, depth, deque<Fp>()}, _self);
 }
 
 void thezeostoken::create(const name& issuer, const asset& maximum_supply)
@@ -547,7 +547,7 @@ asset thezeostoken::get_balance(const name& owner, const symbol_code& sym) const
 #define MT_ARR_LEAF_ROW_OFFSET(d) ((1<<(d)) - 1)
 #define MT_ARR_FULL_TREE_OFFSET(d) ((1<<((d)+1)) - 1)
 #define MT_NUM_LEAVES(d) (1<<(d))
-checksum256 thezeostoken::insert_into_merkle_tree(const checksum256& val)
+Fp thezeostoken::insert_into_merkle_tree(const Fp& val)
 {
     // fetch global stats
     auto stats = global.get();
@@ -557,7 +557,7 @@ checksum256 thezeostoken::insert_into_merkle_tree(const checksum256& val)
     // calculate tree offset to translate array indices of >local< tree to global array indices
     uint64_t tos = stats.mt_leaf_count / MT_NUM_LEAVES(stats.mt_depth) /*=tree_idx*/ * MT_ARR_FULL_TREE_OFFSET(stats.mt_depth);
 
-    // insert val into leaf
+    // insert fp_val into leaf
     mt_t tree(_self, _self.value);
     tree.emplace(_self, [&](auto& leaf) {
         leaf.idx = tos + idx;
@@ -574,20 +574,15 @@ checksum256 thezeostoken::insert_into_merkle_tree(const checksum256& val)
         uint64_t sis_idx = is_left_child ? idx + 1 : idx - 1;
 
         // get values of both nodes
-        //                                     (n)              |            (n)
-        //                                   /     \            |         /      \
-        //                                (idx)     (0)         |     (sis_idx)  (idx)
-        checksum256 l = is_left_child ? tree.get(tos + idx).val : tree.get(tos + sis_idx).val;
-        checksum256 r = is_left_child ? checksum256() /* =0 */  : tree.get(tos + idx).val;
+        //                            (n)              |            (n)
+        //                          /     \            |         /      \
+        //                       (idx)     (0)         |     (sis_idx)  (idx)
+        Fp l = is_left_child ? tree.get(tos + idx).val : tree.get(tos + sis_idx).val;
+        Fp r = is_left_child ? Fp() /* =0 */           : tree.get(tos + idx).val;
+        // TODO use empty_leaf() instead of Fp()
 
         // concatenate and digest
-        uint8_t digest[32];
-        Blake2sContext context;
-        blake2sInit(&context, NULL, 0, 32);
-        blake2sUpdate(&context, l.extract_as_byte_array().data(), 32);
-        blake2sUpdate(&context, r.extract_as_byte_array().data(), 32);
-        blake2sFinal(&context, digest);
-        checksum256 parent_val = checksum256(digest);
+        Fp parent_val = sinsemilla_combine(d, l, r);
 
         // set idx to parent node index:
         // left child's array index divided by two (integer division) equals array index of parent node
@@ -618,7 +613,7 @@ checksum256 thezeostoken::insert_into_merkle_tree(const checksum256& val)
     return tree.get(tos).val;
 }
 
-bool thezeostoken::is_root_valid(const checksum256& root)
+bool thezeostoken::is_root_valid(const Fp& root)
 {
     // a root is valid if it is the root of an existing full merkle tree OR in the queue
     // of the most recent roots of the current merkle tree
