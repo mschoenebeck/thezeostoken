@@ -201,7 +201,7 @@ void thezeostoken::exec(const vector<zaction>& ztx)
     require_auth(_self);
     //check(0, "exec!");
 
-    Fp root;
+    checksum256 root;
     bool root_dirty = false;
     for(auto za = ztx.begin(); za != ztx.end(); ++za)
     {
@@ -362,7 +362,7 @@ void thezeostoken::init(const uint64_t& depth)
         it = nf.erase(it);
     
     // reset global stats table
-    global.set({0, 0, depth, deque<Fp>()}, _self);
+    global.set({0, 0, depth, deque<checksum256>()}, _self);
 }
 
 void thezeostoken::create(const name& issuer, const asset& maximum_supply)
@@ -547,7 +547,7 @@ asset thezeostoken::get_balance(const name& owner, const symbol_code& sym) const
 #define MT_ARR_LEAF_ROW_OFFSET(d) ((1<<(d)) - 1)
 #define MT_ARR_FULL_TREE_OFFSET(d) ((1<<((d)+1)) - 1)
 #define MT_NUM_LEAVES(d) (1<<(d))
-Fp thezeostoken::insert_into_merkle_tree(const Fp& val)
+checksum256 thezeostoken::insert_into_merkle_tree(const checksum256& val)
 {
     // fetch global stats
     auto stats = global.get();
@@ -557,7 +557,7 @@ Fp thezeostoken::insert_into_merkle_tree(const Fp& val)
     // calculate tree offset to translate array indices of >local< tree to global array indices
     uint64_t tos = stats.mt_leaf_count / MT_NUM_LEAVES(stats.mt_depth) /*=tree_idx*/ * MT_ARR_FULL_TREE_OFFSET(stats.mt_depth);
 
-    // insert fp_val into leaf
+    // insert val into leaf
     mt_t tree(_self, _self.value);
     tree.emplace(_self, [&](auto& leaf) {
         leaf.idx = tos + idx;
@@ -577,11 +577,11 @@ Fp thezeostoken::insert_into_merkle_tree(const Fp& val)
         //                            (n)              |            (n)
         //                          /     \            |         /      \
         //                       (idx)     (0)         |     (sis_idx)  (idx)
-        Fp l = is_left_child ? tree.get(tos + idx).val : tree.get(tos + sis_idx).val;
-        Fp r = is_left_child ? Fp() /* =0 */           : tree.get(tos + idx).val;
-        // TODO use empty_leaf() instead of Fp()
+        Fp l = is_left_child ? tree.get(tos + idx).val : tree.get(tos + sis_idx).val;   // implicit conversion
+        Fp r = is_left_child ? Fp() /* =0 */           : tree.get(tos + idx).val;       // implicit conversion
+        // TODO: use empty_leaf() instead of Fp() which is just zeros
 
-        // concatenate and digest
+        // calculate sinsemilla merkle hash of parent node
         Fp parent_val = sinsemilla_combine(d, l, r);
 
         // set idx to parent node index:
@@ -595,13 +595,13 @@ Fp thezeostoken::insert_into_merkle_tree(const Fp& val)
         {
             tree.emplace(_self, [&](auto& node) {
                 node.idx = tos + idx;
-                node.val = parent_val;
+                node.val = parent_val.data; // implicit conversion
             });
         }
         else
         {
             tree.modify(it, _self, [&](auto& node) {
-                node.val = parent_val;
+                node.val = parent_val.data; // implicit conversion
             });
         }
     }
@@ -613,7 +613,7 @@ Fp thezeostoken::insert_into_merkle_tree(const Fp& val)
     return tree.get(tos).val;
 }
 
-bool thezeostoken::is_root_valid(const Fp& root)
+bool thezeostoken::is_root_valid(const checksum256& root)
 {
     // a root is valid if it is the root of an existing full merkle tree OR in the queue
     // of the most recent roots of the current merkle tree

@@ -85,7 +85,7 @@ CONTRACT_START()
     TABLE merkle_node
     {
         uint64_t idx;
-        Fp val;
+        checksum256 val;
 
         uint64_t primary_key() const { return idx; }
     };
@@ -135,10 +135,10 @@ CONTRACT_START()
 
     TABLE global
     {
-        uint64_t note_count;    // number of encrypted notes
-        uint64_t mt_leaf_count; // number of merkle tree leaves
-        uint64_t mt_depth;      // merkle tree depth
-        deque<Fp> mt_roots;     // stores the most recent roots defined by MTS_NUM_ROOTS. the current root is always the first element
+        uint64_t note_count;            // number of encrypted notes
+        uint64_t mt_leaf_count;         // number of merkle tree leaves
+        uint64_t mt_depth;              // merkle tree depth
+        deque<checksum256> mt_roots;    // stores the most recent roots defined by MTS_NUM_ROOTS. the current root is always the first element
     };
     using g_t = singleton<"global"_n, global>;
     g_t global;
@@ -169,9 +169,9 @@ CONTRACT_START()
                      const asset& value,
                      const name& ram_payer);
     
-    Fp insert_into_merkle_tree(const Fp& val);
+    checksum256 insert_into_merkle_tree(const checksum256& val);
     
-    bool is_root_valid(const Fp& root);
+    bool is_root_valid(const checksum256& root);
 
     public:
 
