@@ -534,6 +534,44 @@ asset thezeostoken::get_balance(const name& owner, const symbol_code& sym) const
     return ac.balance;
 }
 
+// empty roots up to depth 32
+// d=0 => EMPTY_LEAF,
+// d=1 => sinsemilla_combine(0, EMPTY_LEAF, EMPTY_LEAF)
+const Fp thezeostoken::EMPTY_ROOT[] = {
+    Fp({0xcfc3a984fffffff9, 0x1011d11bbee5303e, 0xffffffffffffffff, 0x3fffffffffffffff}),
+    Fp({0x07a9009e0a581029, 0x09e7b91f81e378fc, 0x1a82a264f22bea0a, 0x0c82031f50309c9f}),
+    Fp({0xc9ecfc3a09178d32, 0x0b4c9ff2201994bf, 0x22cb9c0a6e41bd2a, 0x1c3b7eb79eeaf10a}),
+    Fp({0x39bf490b9c63a6b3, 0x6b047793eebd2ad7, 0x8b6a56cc1bb1d2e6, 0x0e5ada44b5ac900b}),
+    Fp({0xdaab63818557da0d, 0x21bb27e5ff238824, 0xbf65270b467ddf84, 0x339da128deb77752}),
+    Fp({0xef0f55ff1a7862c0, 0xd3791e6211299a1c, 0x7d9b4c74da669560, 0x23c5bbf35b04091d}),
+    Fp({0x95ef1287d7b44f08, 0x2b896f33a8733787, 0x103446c2f6129e50, 0x3948396852c405ed}),
+    Fp({0x650cbea2da366868, 0xb4cf379f57fb95ff, 0xb8f866e7fbe3a165, 0x14341745aa0a32e1}),
+    Fp({0x30a2f7c76000d014, 0x582926eae7647de9, 0x897539a776ee3c7c, 0x3ec97effbfdc357a}),
+    Fp({0x5a3e1d2dfeb2f3f5, 0x508c680f28b566a7, 0xc637225236726af1, 0x318ff0f1acb17d2a}),
+    Fp({0x982c92d2a442f828, 0x21f3b869d3b41fd5, 0xefc315441486318c, 0x317b7c06862887d1}),
+    Fp({0x8bb91e504ff6674a, 0x4dfdc4b7c448d625, 0x34526da1897fb804, 0x193258690b34d94d}),
+    Fp({0x742ec7b7098d5bff, 0xb56ec4a072832980, 0x69a6ea9032682613, 0x1a78651a8a6b5ba7}),
+    Fp({0xa8982dcb00e85cc2, 0xd518389f0e87cb1d, 0x5c52f8e62fa88076, 0x14d9efe65120c572}),
+    Fp({0x87e0bdcd42993761, 0xdb9343f10eeea647, 0xf4856994b3b2a0b4, 0x0fb917dc0f856b13}),
+    Fp({0xd662ffd211e7f368, 0xfc069740671423a8, 0x2bfa72c6a613489d, 0x1f8c47597f4cff15}),
+    Fp({0x2b80f62dc6d863ab, 0x6c5045667d2c8119, 0xd910b640fdf0e263, 0x1b64d31d56b12539}),
+    Fp({0xd8dbcb104faa6a75, 0x8f1af94d6735e09c, 0x86fbf312a62ccf41, 0x267ed8285dcc11f5}),
+    Fp({0xd76f4dabcd4c72ce, 0xa7f38b447eb41365, 0x771bda01c66290bd, 0x30d681f214d6573e}),
+    Fp({0x3c7cf91c27440783, 0x0a09276c5efcd6e4, 0x6d712293c41b473f, 0x1fba7925b82b1993}),
+    Fp({0xb0e99d8b68f82bab, 0x25b6f82dee24d331, 0xe84b455aab403234, 0x237352d7b9b5eaea}),
+    Fp({0x7df9a36a040c75b4, 0xb66bc076da8e8636, 0x4575bcc51669bb77, 0x3214d00ce4062f44}),
+    Fp({0x4494961af85b12e3, 0xced65f75e340ec69, 0xbcd1ad06f0d2dd0f, 0x21debbbef0c3f9b7}),
+    Fp({0xacf2a3c599dac9d7, 0x7b45cfb6710feabe, 0x72ad422116d1f1c5, 0x39874c815db36323}),
+    Fp({0xe9640012b7154a1f, 0x5f0ce18b91343ecc, 0xdcd87930bbe9c0fd, 0x037ce5b5657b1733}),
+    Fp({0x64cce7f2a3cf17ec, 0xd1ff3c6376899f7d, 0x760edce8a9e779b2, 0x088d63087580ae23}),
+    Fp({0xf79dbf3510ef2b84, 0xbcc919060d4f063c, 0x2e40a265292f3935, 0x274f5f826a3c118c}),
+    Fp({0x41720afbfc0df919, 0xbfd210d9d5b68976, 0xe7826aebcb27128f, 0x2ae08e5ce2536718}),
+    Fp({0x51cd6de53b41d7b5, 0x04526eb96ccbce4f, 0xc7a4373b4c51947a, 0x1da4928d22c7d20b}),
+    Fp({0xaabcde1182e7c715, 0xd1cbb4a7dd212705, 0x0923feb28a9c387c, 0x253f940e57829ebd}),
+    Fp({0xe0a73ed971f07cc4, 0x527c02d03a58ed2a, 0x4335ceb77aa63432, 0x0b84f68d78bd7ec8}),
+    Fp({0x4f9a61965c06c1bc, 0xd3eed8b6685d6ff7, 0xe44224d7fcb0721c, 0x3e9d3ee01e5ea615}),
+};
+
 // merkle tree structure:
 // 
 //              (0)                 [d = 0] (root)
@@ -578,8 +616,7 @@ checksum256 thezeostoken::insert_into_merkle_tree(const checksum256& val)
         //                          /     \            |         /      \
         //                       (idx)     (0)         |     (sis_idx)  (idx)
         Fp l = is_left_child ? tree.get(tos + idx).val : tree.get(tos + sis_idx).val;   // implicit conversion
-        Fp r = is_left_child ? Fp() /* =0 */           : tree.get(tos + idx).val;       // implicit conversion
-        // TODO: use empty_leaf() instead of Fp() which is just zeros
+        Fp r = is_left_child ? EMPTY_ROOT[d]           : tree.get(tos + idx).val;       // implicit conversion
 
         // calculate sinsemilla merkle hash of parent node
         Fp parent_val = sinsemilla_combine(d, l, r);
@@ -610,6 +647,7 @@ checksum256 thezeostoken::insert_into_merkle_tree(const checksum256& val)
     ++stats.mt_leaf_count;
     global.set(stats, _self);
 
+    // return root node
     return tree.get(tos).val;
 }
 

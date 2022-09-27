@@ -45,6 +45,9 @@ optional<action> better_get_action(uint32_t type, uint32_t index)
 
 CONTRACT_START()
     
+    /// empty roots up to depth 32
+    static const Fp EMPTY_ROOT[32];
+
     // shardbucket table for dapp::multi_index
     TABLE shardbucket
     {
