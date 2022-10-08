@@ -351,7 +351,7 @@ void thezeostoken::init(const uint64_t& depth)
     require_auth(_self);
 
     // empty all tables (notes, mt, nf)
-    enc_notes_t notes(_self, _self.value);
+    notes_t notes(_self, _self.value);
     for(auto it = notes.begin(); it != notes.end(); )
         it = notes.erase(it);
     mt_t mt(_self, _self.value);
@@ -361,7 +361,7 @@ void thezeostoken::init(const uint64_t& depth)
     for(auto it = nf.begin(); it != nf.end(); )
         it = nf.erase(it);
     
-    // reset global stats table
+    // reset global state
     global.set({0, 0, depth, deque<checksum256>()}, _self);
 }
 
@@ -587,13 +587,13 @@ const Fp thezeostoken::EMPTY_ROOT[] = {
 #define MT_NUM_LEAVES(d) (1<<(d))
 checksum256 thezeostoken::insert_into_merkle_tree(const checksum256& val)
 {
-    // fetch global stats
-    auto stats = global.get();
+    // fetch global state
+    auto state = global.get();
 
     // calculate array index of next free leaf in >local< tree
-    uint64_t idx = MT_ARR_LEAF_ROW_OFFSET(stats.mt_depth) + stats.mt_leaf_count % MT_NUM_LEAVES(stats.mt_depth);
+    uint64_t idx = MT_ARR_LEAF_ROW_OFFSET(state.mt_depth) + state.mt_leaf_count % MT_NUM_LEAVES(state.mt_depth);
     // calculate tree offset to translate array indices of >local< tree to global array indices
-    uint64_t tos = stats.mt_leaf_count / MT_NUM_LEAVES(stats.mt_depth) /*=tree_idx*/ * MT_ARR_FULL_TREE_OFFSET(stats.mt_depth);
+    uint64_t tos = state.mt_leaf_count / MT_NUM_LEAVES(state.mt_depth) /*=tree_idx*/ * MT_ARR_FULL_TREE_OFFSET(state.mt_depth);
 
     // insert val into leaf
     mt_t tree(_self, _self.value);
@@ -603,7 +603,7 @@ checksum256 thezeostoken::insert_into_merkle_tree(const checksum256& val)
     });
 
     // calculate merkle path up to root
-    for(int d = stats.mt_depth; d > 0; d--)
+    for(int d = state.mt_depth; d > 0; d--)
     {
         // if array index of node is uneven it is always the left child
         bool is_left_child = 1 == idx % 2;
@@ -643,9 +643,9 @@ checksum256 thezeostoken::insert_into_merkle_tree(const checksum256& val)
         }
     }
     
-    // update global stats
-    ++stats.mt_leaf_count;
-    global.set(stats, _self);
+    // update global state
+    ++state.mt_leaf_count;
+    global.set(state, _self);
 
     // return root node
     return tree.get(tos).val;
@@ -657,9 +657,9 @@ bool thezeostoken::is_root_valid(const checksum256& root)
     // of the most recent roots of the current merkle tree
     
     // check if root is in deque of most recent roots
-    auto stats = global.get();
+    auto state = global.get();
 
-    for(auto r = stats.mt_roots.begin(); r != stats.mt_roots.end(); ++r)
+    for(auto r = state.mt_roots.begin(); r != state.mt_roots.end(); ++r)
     {
         if(*r == root)
         {
@@ -668,13 +668,13 @@ bool thezeostoken::is_root_valid(const checksum256& root)
     }
     
     // check roots of previous, full merkle trees (tree_index > 0)
-    uint64_t tree_idx = stats.mt_leaf_count / MT_NUM_LEAVES(stats.mt_depth);
+    uint64_t tree_idx = state.mt_leaf_count / MT_NUM_LEAVES(state.mt_depth);
 
     mt_t tree(_self, _self.value);
     for(uint64_t t = 0; t < tree_idx; ++t)
     {
         // can use get here because root must exist if this tree has a leaf
-        auto it = tree.get(t * MT_ARR_FULL_TREE_OFFSET(stats.mt_depth));
+        auto it = tree.get(t * MT_ARR_FULL_TREE_OFFSET(state.mt_depth));
         
         if(it.val == root)
         {

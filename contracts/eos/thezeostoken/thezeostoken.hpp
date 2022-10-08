@@ -77,11 +77,11 @@ CONTRACT_START()
         uint64_t primary_key() const { return idx; }
     };
 #ifdef USE_VRAM
-    typedef dapp::advanced_multi_index<"notes"_n, enc_note, uint64_t> enc_notes_t;
+    typedef dapp::advanced_multi_index<"notes"_n, enc_note, uint64_t> notes_t;
     typedef eosio::multi_index<".notes"_n, enc_note> notes_t_v_abi;
     typedef eosio::multi_index<"notes"_n, shardbucket> notes_t_abi;
 #else
-    typedef eosio::multi_index<"noteseosram"_n, enc_note> enc_notes_t;
+    typedef eosio::multi_index<"noteseosram"_n, enc_note> notes_t;
 #endif
 
     // zeos note commitments merkle tree table
@@ -136,14 +136,14 @@ CONTRACT_START()
     using ftb_t = singleton<"ftbuffer"_n, ft_buffer>;
     ftb_t ftb;
 
-    TABLE global
+    TABLE state
     {
         uint64_t note_count;            // number of encrypted notes
         uint64_t mt_leaf_count;         // number of merkle tree leaves
         uint64_t mt_depth;              // merkle tree depth
         deque<checksum256> mt_roots;    // stores the most recent roots defined by MTS_NUM_ROOTS. the current root is always the first element
     };
-    using g_t = singleton<"global"_n, global>;
+    using g_t = singleton<"global"_n, state>;
     g_t global;
 
     // token contract tables
