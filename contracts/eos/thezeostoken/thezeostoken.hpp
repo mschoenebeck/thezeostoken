@@ -28,6 +28,10 @@ using namespace std;
 
 #define G_ROOTS_FIFO_SIZE 32
 
+#define MT_ARR_LEAF_ROW_OFFSET(d) ((1ULL<<(d)) - 1)
+#define MT_ARR_FULL_TREE_OFFSET(d) ((1ULL<<((d)+1)) - 1)
+#define MT_NUM_LEAVES(d) (1ULL<<(d))
+
 #define CONTRACT_NAME() thezeostoken
 
 // This version of eosio::get_action doesn't abort when index is out of range.
@@ -44,9 +48,6 @@ optional<action> better_get_action(uint32_t type, uint32_t index)
 }
 
 CONTRACT_START()
-    
-    /// empty roots up to depth 32
-    static const Fp EMPTY_ROOT[32];
 
     // shardbucket table for dapp::multi_index
     TABLE shardbucket
@@ -119,31 +120,31 @@ CONTRACT_START()
 #endif
 
     // buffers an entire tx for the time of execution
-    TABLE tx_buffer
+    TABLE txbuffer
     {
         size_t cur;
         size_t last;
         vector<action> tx;
     };
-    using txb_t = singleton<"txbuffer"_n, tx_buffer>;
+    using txb_t = singleton<"txbuffer"_n, txbuffer>;
     txb_t txb;
 
     // buffers a quantity of fungible tokens
-    TABLE ft_buffer
+    TABLE ftbuffer
     {
         extended_asset quantity;
     };
-    using ftb_t = singleton<"ftbuffer"_n, ft_buffer>;
+    using ftb_t = singleton<"ftbuffer"_n, ftbuffer>;
     ftb_t ftb;
 
-    TABLE state
+    TABLE global
     {
         uint64_t note_count;            // number of encrypted notes
         uint64_t mt_leaf_count;         // number of merkle tree leaves
         uint64_t mt_depth;              // merkle tree depth
         deque<checksum256> mt_roots;    // stores the most recent roots defined by MTS_NUM_ROOTS. the current root is always the first element
     };
-    using g_t = singleton<"global"_n, state>;
+    using g_t = singleton<"global"_n, global>;
     g_t global;
 
     // token contract tables
@@ -172,8 +173,10 @@ CONTRACT_START()
                      const asset& value,
                      const name& ram_payer);
     
-    checksum256 insert_into_merkle_tree(const checksum256& val);
-    
+    void update_merkle_tree(const uint64_t& leaf_count,
+                            const uint64_t& tree_depth,
+                            const vector<const uint8_t*>& leaves);
+
     bool is_root_valid(const checksum256& root);
 
     public:
@@ -199,10 +202,11 @@ CONTRACT_START()
     ACTION step();
     ACTION exec(const vector<zaction>& ztx);
     ACTION test22(const vector<zaction>& ztx, const uint64_t& test22);
+    ACTION testmtupdate(const uint64_t& num);
     void onfttransfer(name from, name to, asset quantity, string memo);
 
     // init
-    ACTION init(const uint64_t& depth);
+    ACTION init(const uint64_t& tree_depth);
 
     // token contract actions
     ACTION create(const name& issuer,
@@ -232,7 +236,7 @@ CONTRACT_START()
     inline asset get_balance(const name& owner,
                              const symbol_code& sym) const;
     
-CONTRACT_END((setvk)(verifyproof)(begin)(step)(exec)(test22)(init)(create)(issue)(retire)(transfer)(open)(close)(xdcommit))
+CONTRACT_END((setvk)(verifyproof)(begin)(step)(exec)(test22)(testmtupdate)(init)(create)(issue)(retire)(transfer)(open)(close)(xdcommit))
 /*
 };
 

@@ -16,7 +16,6 @@
         "npm": {}
     },
     "dependencies": {
-        "oracle-zeos": "",
-        "storage-dapp-service": ""
+        "oracle-zeos": ""
     }
 }

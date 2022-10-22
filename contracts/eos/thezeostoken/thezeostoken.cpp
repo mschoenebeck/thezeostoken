@@ -94,9 +94,9 @@ void thezeostoken::begin(const string& proof, vector<action>& tx)
 
     // make sure the action pattern (begin)(step)(step)... is given with as many steps as 'tx' requires
     // check out: https://eoscommunity.github.io/clsdk-docs/book/std/cpay/index.html
-    uint32_t begin_index = -1;
-    uint32_t last_step = -1;
-    uint32_t index = 0;
+    int32_t begin_index = -1;
+    int32_t last_step = -1;
+    int32_t index = 0;
     for(;; ++index)
     {
         auto action = better_get_action(1, index);
@@ -110,13 +110,14 @@ void thezeostoken::begin(const string& proof, vector<action>& tx)
         }
         else if(begin_index >= 0 && index <= last_step)
         {
-            check(action->account == "thezeostoken"_n && action->name == "step"_n, "not enough 'step' actions after 'begin'");
+            check(action->account == "thezeostoken"_n && action->name == "step"_n, "1: not enough 'step' actions after 'begin'");
         }
     }
-    check(index > last_step, "not enough 'step' actions after 'begin'");
+    check(index > last_step, "2: not enough 'step' actions after 'begin'");
 
     // collect public inputs for proof bundle verification and check for blacklisted transactions
     string inputs = "";
+    vector<const uint8_t*> leaves;
     for(auto a = tx.begin(); a != tx.end(); ++a)
     {
         // blacklist all actions with pattern: *::transfer and eosio::*
@@ -131,11 +132,51 @@ void thezeostoken::begin(const string& proof, vector<action>& tx)
             char* ptr = a->data.data() + 1 + sizeof(zaction::type) + ZI_SIZE + 1 + sizeof(zaction::type);
             do
             {
+                // see columns CMB and CMC of table: https://mschoenebeck.github.io/zeos-orchard/protocol/circuit.html#configurations
+                switch(*reinterpret_cast<const uint64_t*>(ptr - sizeof(zaction::type)))
+                {
+                    case ZA_TRANSFERFT:
+                    {   // CMB and CMC
+                        leaves.push_back(reinterpret_cast<const uint8_t*>(ptr + ZI_SIZE - 64));
+                        leaves.push_back(reinterpret_cast<const uint8_t*>(ptr + ZI_SIZE - 32));
+                        inputs.append(byte2str<ZI_SIZE>(reinterpret_cast<const uint8_t*>(ptr)));
+                        break;
+                    }
+                    case ZA_BURNFT:
+                    {
+                        // only CMC
+                        leaves.push_back(reinterpret_cast<const uint8_t*>(ptr + ZI_SIZE - 32));
+                        inputs.append(byte2str<ZI_SIZE>(reinterpret_cast<const uint8_t*>(ptr)));
+                        break;
+                    }
+                    case ZA_MINTFT:
+                    case ZA_MINTNFT:
+                    case ZA_BURNAUTH:
+                    case ZA_TRANSFERNFT:
+                    {
+                        // only CMB
+                        leaves.push_back(reinterpret_cast<const uint8_t*>(ptr + ZI_SIZE - 64));
+                        inputs.append(byte2str<ZI_SIZE>(reinterpret_cast<const uint8_t*>(ptr)));
+                        break;
+                    }
+                    // don't collect inputs if zaction type is ZA_MINTAUTH because it does not require a zero knowledge proof
+                    case ZA_MINTAUTH:
+                    case ZA_DUMMY:
+                    case ZA_NULL:
+                    default:
+                    {
+                        break;
+                    }
+                }
+
+                /*
                 // don't collect inputs if zaction type is ZA_MINTAUTH because it does not require a zero knowledge proof
                 if(ZA_MINTAUTH != *reinterpret_cast<const uint64_t*>(ptr - sizeof(zaction::type)))
                 {
                     inputs.append(byte2str<ZI_SIZE>(reinterpret_cast<const uint8_t*>(ptr)));
                 }
+                */
+
                 ptr += ZI_SIZE;
                 ptr += *reinterpret_cast<const uint8_t*>(ptr) + 1 + sizeof(zaction::type);
                 ++i;
@@ -155,8 +196,30 @@ void thezeostoken::begin(const string& proof, vector<action>& tx)
         verifyproof("zeos", "thezeostoken"_n, "zeosorchard1"_n, proof, inputs);
     }
 
-    // TODO: add encrypted notes to tx_data list
-    // TODO check num of enc notes is not more than what counted in loop above (TODO)
+    check(global.exists(), "contract not initialized");
+    auto stats = global.get();
+
+    // add new note commitments to merkle tree
+    if(leaves.size() > 0)
+    {
+        update_merkle_tree(stats.mt_leaf_count, stats.mt_depth, leaves);
+
+        // update global stats
+        stats.mt_leaf_count += leaves.size();
+        mt_t tree(_self, _self.value);
+        auto root = tree.get(stats.mt_leaf_count / MT_NUM_LEAVES(stats.mt_depth));
+        stats.mt_roots.push_front(root.val);
+        // only memorize the most recent x number of root nodes
+        if(stats.mt_roots.size() > G_ROOTS_FIFO_SIZE)
+        {
+            stats.mt_roots.pop_back();
+        }
+    }
+
+    // TODO check num of enc notes is not more than leaves.size()
+    // TODO add enc notes to list
+
+    global.set(stats, _self);
 
     // copy tx into singleton buffer where it remains only during its execution. The last 'step' frees the buffer.
     txb.set({0, tx.size()-1, tx}, _self);
@@ -201,8 +264,6 @@ void thezeostoken::exec(const vector<zaction>& ztx)
     require_auth(_self);
     //check(0, "exec!");
 
-    checksum256 root;
-    bool root_dirty = false;
     for(auto za = ztx.begin(); za != ztx.end(); ++za)
     {
         switch(za->type)
@@ -219,13 +280,11 @@ void thezeostoken::exec(const vector<zaction>& ztx)
             case ZA_MINTFT:
             {
                 // TODO all the other checks for TRANSFERFT (ZEOS Book)
+                check(ftb.exists(), "ZA_MINTFT: deposit required before mint");
                 auto funds = ftb.get();
                 check(za->ins.b_d1 == funds.quantity.quantity.amount, "ZA_MINTFT: wrong amount");
                 check(za->ins.b_d2 == funds.quantity.quantity.symbol.raw(), "ZA_MINTFT: wrong symbol");
                 check(za->ins.b_sc == funds.quantity.contract.value, "ZA_MINTFT: wrong contract");
-                // add new leaves to merkle tree
-                root = insert_into_merkle_tree(za->ins.cmb);
-                root_dirty = true;
                 // clear buffer
                 ftb.remove();
                 break;
@@ -249,10 +308,6 @@ void thezeostoken::exec(const vector<zaction>& ztx)
                 nf.emplace(_self, [&](auto& n) {
                     n.val = za->ins.nf;
                 });
-                // add new leaves to merkle tree
-                insert_into_merkle_tree(za->ins.cmb);
-                root = insert_into_merkle_tree(za->ins.cmc);
-                root_dirty = true;
                 break;
             }
             
@@ -276,9 +331,6 @@ void thezeostoken::exec(const vector<zaction>& ztx)
                 });
                 // payout b to user account
                 // TODO
-                // add new leaves to merkle tree
-                root = insert_into_merkle_tree(za->ins.cmc);
-                root_dirty = true;
                 break;
             }
             
@@ -314,27 +366,12 @@ void thezeostoken::exec(const vector<zaction>& ztx)
             }
         }
     }
-
-    // update list of roots if necessary
-    if(root_dirty)
-    {
-        // update global stats
-        auto stats = global.get();
-        stats.mt_roots.push_front(root);
-        // only memorize the most recent x number of root nodes
-        if(stats.mt_roots.size() > G_ROOTS_FIFO_SIZE)
-        {
-            stats.mt_roots.pop_back();
-        }
-        global.set(stats, _self);
-    }
-
 }
 
 void thezeostoken::test22(const vector<zaction>& ztx, const uint64_t& test22)
 {
     require_auth("thezeostoken"_n);
-    check(test22 == 12345, test22);
+    //check(test22 == 12345, test22);
 }
 
 void thezeostoken::onfttransfer(name from, name to, asset quantity, string memo)
@@ -346,7 +383,7 @@ void thezeostoken::onfttransfer(name from, name to, asset quantity, string memo)
     }
 }
 
-void thezeostoken::init(const uint64_t& depth)
+void thezeostoken::init(const uint64_t& tree_depth)
 {
     require_auth(_self);
 
@@ -362,7 +399,7 @@ void thezeostoken::init(const uint64_t& depth)
         it = nf.erase(it);
     
     // reset global state
-    global.set({0, 0, depth, deque<checksum256>()}, _self);
+    global.set({0, 0, tree_depth, deque<checksum256>()}, _self);
 }
 
 void thezeostoken::create(const name& issuer, const asset& maximum_supply)
@@ -534,121 +571,77 @@ asset thezeostoken::get_balance(const name& owner, const symbol_code& sym) const
     return ac.balance;
 }
 
-// empty roots up to depth 32
-// d=0 => EMPTY_LEAF,
-// d=1 => sinsemilla_combine(0, EMPTY_LEAF, EMPTY_LEAF)
-const Fp thezeostoken::EMPTY_ROOT[] = {
-    Fp({0xcfc3a984fffffff9, 0x1011d11bbee5303e, 0xffffffffffffffff, 0x3fffffffffffffff}),
-    Fp({0x07a9009e0a581029, 0x09e7b91f81e378fc, 0x1a82a264f22bea0a, 0x0c82031f50309c9f}),
-    Fp({0xc9ecfc3a09178d32, 0x0b4c9ff2201994bf, 0x22cb9c0a6e41bd2a, 0x1c3b7eb79eeaf10a}),
-    Fp({0x39bf490b9c63a6b3, 0x6b047793eebd2ad7, 0x8b6a56cc1bb1d2e6, 0x0e5ada44b5ac900b}),
-    Fp({0xdaab63818557da0d, 0x21bb27e5ff238824, 0xbf65270b467ddf84, 0x339da128deb77752}),
-    Fp({0xef0f55ff1a7862c0, 0xd3791e6211299a1c, 0x7d9b4c74da669560, 0x23c5bbf35b04091d}),
-    Fp({0x95ef1287d7b44f08, 0x2b896f33a8733787, 0x103446c2f6129e50, 0x3948396852c405ed}),
-    Fp({0x650cbea2da366868, 0xb4cf379f57fb95ff, 0xb8f866e7fbe3a165, 0x14341745aa0a32e1}),
-    Fp({0x30a2f7c76000d014, 0x582926eae7647de9, 0x897539a776ee3c7c, 0x3ec97effbfdc357a}),
-    Fp({0x5a3e1d2dfeb2f3f5, 0x508c680f28b566a7, 0xc637225236726af1, 0x318ff0f1acb17d2a}),
-    Fp({0x982c92d2a442f828, 0x21f3b869d3b41fd5, 0xefc315441486318c, 0x317b7c06862887d1}),
-    Fp({0x8bb91e504ff6674a, 0x4dfdc4b7c448d625, 0x34526da1897fb804, 0x193258690b34d94d}),
-    Fp({0x742ec7b7098d5bff, 0xb56ec4a072832980, 0x69a6ea9032682613, 0x1a78651a8a6b5ba7}),
-    Fp({0xa8982dcb00e85cc2, 0xd518389f0e87cb1d, 0x5c52f8e62fa88076, 0x14d9efe65120c572}),
-    Fp({0x87e0bdcd42993761, 0xdb9343f10eeea647, 0xf4856994b3b2a0b4, 0x0fb917dc0f856b13}),
-    Fp({0xd662ffd211e7f368, 0xfc069740671423a8, 0x2bfa72c6a613489d, 0x1f8c47597f4cff15}),
-    Fp({0x2b80f62dc6d863ab, 0x6c5045667d2c8119, 0xd910b640fdf0e263, 0x1b64d31d56b12539}),
-    Fp({0xd8dbcb104faa6a75, 0x8f1af94d6735e09c, 0x86fbf312a62ccf41, 0x267ed8285dcc11f5}),
-    Fp({0xd76f4dabcd4c72ce, 0xa7f38b447eb41365, 0x771bda01c66290bd, 0x30d681f214d6573e}),
-    Fp({0x3c7cf91c27440783, 0x0a09276c5efcd6e4, 0x6d712293c41b473f, 0x1fba7925b82b1993}),
-    Fp({0xb0e99d8b68f82bab, 0x25b6f82dee24d331, 0xe84b455aab403234, 0x237352d7b9b5eaea}),
-    Fp({0x7df9a36a040c75b4, 0xb66bc076da8e8636, 0x4575bcc51669bb77, 0x3214d00ce4062f44}),
-    Fp({0x4494961af85b12e3, 0xced65f75e340ec69, 0xbcd1ad06f0d2dd0f, 0x21debbbef0c3f9b7}),
-    Fp({0xacf2a3c599dac9d7, 0x7b45cfb6710feabe, 0x72ad422116d1f1c5, 0x39874c815db36323}),
-    Fp({0xe9640012b7154a1f, 0x5f0ce18b91343ecc, 0xdcd87930bbe9c0fd, 0x037ce5b5657b1733}),
-    Fp({0x64cce7f2a3cf17ec, 0xd1ff3c6376899f7d, 0x760edce8a9e779b2, 0x088d63087580ae23}),
-    Fp({0xf79dbf3510ef2b84, 0xbcc919060d4f063c, 0x2e40a265292f3935, 0x274f5f826a3c118c}),
-    Fp({0x41720afbfc0df919, 0xbfd210d9d5b68976, 0xe7826aebcb27128f, 0x2ae08e5ce2536718}),
-    Fp({0x51cd6de53b41d7b5, 0x04526eb96ccbce4f, 0xc7a4373b4c51947a, 0x1da4928d22c7d20b}),
-    Fp({0xaabcde1182e7c715, 0xd1cbb4a7dd212705, 0x0923feb28a9c387c, 0x253f940e57829ebd}),
-    Fp({0xe0a73ed971f07cc4, 0x527c02d03a58ed2a, 0x4335ceb77aa63432, 0x0b84f68d78bd7ec8}),
-    Fp({0x4f9a61965c06c1bc, 0xd3eed8b6685d6ff7, 0xe44224d7fcb0721c, 0x3e9d3ee01e5ea615}),
-};
-
-// merkle tree structure:
-// 
-//              (0)                 [d = 0] (root)
-//         /            \
-//       (1)            (2)         [d = 1]
-//     /    \        /      \
-//   (3)    (4)    (5)      (6)     [d = 2]
-//   / \    / \    /  \    /  \
-// (7) (8)(9)(10)(11)(12)(13)(14)   [d = 3]
-//
-#define MT_ARR_LEAF_ROW_OFFSET(d) ((1<<(d)) - 1)
-#define MT_ARR_FULL_TREE_OFFSET(d) ((1<<((d)+1)) - 1)
-#define MT_NUM_LEAVES(d) (1<<(d))
-checksum256 thezeostoken::insert_into_merkle_tree(const checksum256& val)
+void thezeostoken::update_merkle_tree(const uint64_t& leaf_count, const uint64_t& tree_depth, const vector<const uint8_t*>& leaves)
 {
-    // fetch global state
-    auto state = global.get();
+    // build uri string by concatening all input parameters for the vcpu handler
+    string str = "zeos_merkle_tree_updater://";
+    str.append(to_string(leaf_count));
+    str.append("/");
+    str.append(to_string(tree_depth));
+    str.append("/");
+    for(auto it = leaves.begin(); it != leaves.end(); ++it)
+    {
+        str.append(byte2str<32>(*it));
+    }
 
-    // calculate array index of next free leaf in >local< tree
-    uint64_t idx = MT_ARR_LEAF_ROW_OFFSET(state.mt_depth) + state.mt_leaf_count % MT_NUM_LEAVES(state.mt_depth);
-    // calculate tree offset to translate array indices of >local< tree to global array indices
-    uint64_t tos = state.mt_leaf_count / MT_NUM_LEAVES(state.mt_depth) /*=tree_idx*/ * MT_ARR_FULL_TREE_OFFSET(state.mt_depth);
-
-    // insert val into leaf
-    mt_t tree(_self, _self.value);
-    tree.emplace(_self, [&](auto& leaf) {
-        leaf.idx = tos + idx;
-        leaf.val = val;
+    //uint32_t dsp_count = 0;
+    vector<char> res = getURI(vector<char>(str.begin(), str.end()), [&](auto& results) { 
+        uint32_t dsp_threshold = 1;
+        // ensure the specified amount of DSPs have responded before a response is accepted
+        check(results.size() >= dsp_threshold, "require multiple results for consensus");
+        //dsp_count = results.size();
+        auto itr = results.begin();
+        auto first = itr->result;
+        ++itr;
+        while(itr != results.end())
+        {
+            check(itr->result == first, "consensus failed");
+            ++itr;
+        }
+        return first;
     });
 
-    // calculate merkle path up to root
-    for(int d = state.mt_depth; d > 0; d--)
+    // modify/insert nodes (40 bytes each) into tree
+    mt_t tree(_self, _self.value);
+    check(res.size() % 40 == 0, "Node list must be multiple of 40 bytes: 8 bytes 'index', 32 bytes 'value'");
+    for(int i = 0; i < res.size()/40; i++)
     {
-        // if array index of node is uneven it is always the left child
-        bool is_left_child = 1 == idx % 2;
+        uint64_t* idx_ptr = reinterpret_cast<uint64_t*>(&res[i*40]);
+        // the following might look a bit 'hacky' but it saves us one memcpy and should be safe according
+        // to the STL (https://stackoverflow.com/questions/11205186/treat-c-cstyle-array-as-stdarray)
+        checksum256 val = *reinterpret_cast<array<uint8_t, 32>*>(&res[i*40 + 8]);
 
-        // determine sister node
-        uint64_t sis_idx = is_left_child ? idx + 1 : idx - 1;
-
-        // get values of both nodes
-        //                            (n)              |            (n)
-        //                          /     \            |         /      \
-        //                       (idx)     (0)         |     (sis_idx)  (idx)
-        Fp l = is_left_child ? tree.get(tos + idx).val : tree.get(tos + sis_idx).val;   // implicit conversion
-        Fp r = is_left_child ? EMPTY_ROOT[d]           : tree.get(tos + idx).val;       // implicit conversion
-
-        // calculate sinsemilla merkle hash of parent node
-        Fp parent_val = sinsemilla_combine(d, l, r);
-
-        // set idx to parent node index:
-        // left child's array index divided by two (integer division) equals array index of parent node
-        idx = is_left_child ? idx / 2 : sis_idx / 2;
-
-        // check if parent node was already created
-        auto it = tree.find(tos + idx);
-        // write new parent
-        if(it == tree.end())
+        // MSB of idx determines if node already exists or is new
+        if(*idx_ptr & 0x8000000000000000)
         {
-            tree.emplace(_self, [&](auto& node) {
-                node.idx = tos + idx;
-                node.val = parent_val.data; // implicit conversion
+            auto it = tree.find(*idx_ptr & 0x7FFFFFFFFFFFFFFF);
+            tree.modify(it, _self, [&](auto& row) {
+                row.val = val;
             });
         }
         else
         {
-            tree.modify(it, _self, [&](auto& node) {
-                node.val = parent_val.data; // implicit conversion
+            tree.emplace(_self, [&](auto& row) {
+                row.idx = *idx_ptr;
+                row.val = val;
             });
         }
     }
-    
-    // update global state
-    ++state.mt_leaf_count;
-    global.set(state, _self);
-
-    // return root node
-    return tree.get(tos).val;
+}
+void thezeostoken::testmtupdate(const uint64_t& num)
+{
+    // create vector with <num> empty leaves
+    array<uint8_t, 32> nc = array<uint8_t, 32>{249, 255, 255, 255, 132, 169, 195, 207, 62, 48, 229, 190, 27, 209, 17, 16, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 63};
+    vector<array<uint8_t, 32> > v;
+    for(int i = 0; i < num; i++)
+        v.push_back(nc);
+    vector<const uint8_t*> v_;
+    for(int i = 0; i < num; i++)
+        v_.push_back(v[i].data());
+    // fetch global stats, add leaves, and update global stats
+    auto g = global.get();
+    update_merkle_tree(g.mt_leaf_count, g.mt_depth, v_);
+    global.set({0, g.mt_leaf_count + num, g.mt_depth, deque<checksum256>()}, _self);
 }
 
 bool thezeostoken::is_root_valid(const checksum256& root)
