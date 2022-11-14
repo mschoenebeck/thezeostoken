@@ -32,6 +32,20 @@ using namespace std;
 #define MT_ARR_FULL_TREE_OFFSET(d) ((1ULL<<((d)+1)) - 1)
 #define MT_NUM_LEAVES(d) (1ULL<<(d))
 
+// equivalent to TransmittedNoteCiphertext of note.rs (zeos-orchard)
+struct TransmittedNoteCiphertext
+{
+    // The serialization of the ephemeral public key
+    string epk_bytes; //[u8; 32],
+    // The encrypted note ciphertext
+    string enc_ciphertext; //[u8; ENC_CIPHERTEXT_SIZE],
+    // An encrypted value that allows the holder of the outgoing cipher
+    // key for the note to recover the note plaintext.
+    string out_ciphertext; //[u8; 80],
+
+    EOSLIB_SERIALIZE(TransmittedNoteCiphertext, (epk_bytes)(enc_ciphertext)(out_ciphertext))
+};
+
 #define CONTRACT_NAME() thezeostoken
 
 // This version of eosio::get_action doesn't abort when index is out of range.
@@ -68,21 +82,23 @@ CONTRACT_START()
     };
     typedef eosio::multi_index<"vk"_n, vk> vk_t;
 
-    // encrypted notes table
-    TABLE enc_note
+    // List of all transmitted notes in encrypted form.
+    // equivalent to EOSTransmittedNoteCiphertext of lib.rs (zeos-orchard)
+    TABLE EOSTransmittedNoteCiphertext
     {
-        uint64_t idx;
-        string ciphertext;
-        uint64_t block_num;
+        uint64_t id;
+        uint64_t block_number;
+        uint64_t leaf_index;
+        TransmittedNoteCiphertext encrypted_note;
         
-        uint64_t primary_key() const { return idx; }
+        uint64_t primary_key() const { return id; }
     };
 #ifdef USE_VRAM
-    typedef dapp::advanced_multi_index<"notes"_n, enc_note, uint64_t> notes_t;
-    typedef eosio::multi_index<".notes"_n, enc_note> notes_t_v_abi;
-    typedef eosio::multi_index<"notes"_n, shardbucket> notes_t_abi;
+    typedef dapp::advanced_multi_index<"notes"_n, EOSTransmittedNoteCiphertext, uint64_t> encrypted_notes_t;
+    typedef eosio::multi_index<".notes"_n, EOSTransmittedNoteCiphertext> encrypted_notes_t_v_abi;
+    typedef eosio::multi_index<"notes"_n, shardbucket> encrypted_notes_t_abi;
 #else
-    typedef eosio::multi_index<"noteseosram"_n, enc_note> notes_t;
+    typedef eosio::multi_index<"noteseosram"_n, EOSTransmittedNoteCiphertext> encrypted_notes_t;
 #endif
 
     // zeos note commitments merkle tree table
@@ -213,7 +229,8 @@ CONTRACT_START()
     // execute transaction
     ACTION begin(
         const string& proof,
-        vector<action>& tx
+        vector<action>& tx,
+        const vector<TransmittedNoteCiphertext>& notes
     );
     ACTION step();
     ACTION exec(
@@ -225,6 +242,9 @@ CONTRACT_START()
     );
     ACTION testmtupdate(
         const uint64_t& num
+    );
+    ACTION testaddnote(
+        const vector<TransmittedNoteCiphertext>& notes
     );
     void onfttransfer(
         name from,
@@ -282,7 +302,7 @@ CONTRACT_START()
         const symbol_code& sym
     ) const;
     
-CONTRACT_END((setvk)(verifyproof)(begin)(step)(exec)(test22)(testmtupdate)(init)(create)(issue)(retire)(transfer)(open)(close)(xdcommit))
+CONTRACT_END((setvk)(verifyproof)(begin)(step)(exec)(test22)(testmtupdate)(testaddnote)(init)(create)(issue)(retire)(transfer)(open)(close)(xdcommit))
 /*
 };
 

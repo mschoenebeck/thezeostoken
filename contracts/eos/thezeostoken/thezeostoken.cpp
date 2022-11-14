@@ -103,9 +103,13 @@ inline bool has_exec_zactions(
 
 void thezeostoken::begin(
     const string& proof,
-    vector<action>& tx
+    vector<action>& tx,
+    const vector<TransmittedNoteCiphertext>& notes
 )
 {
+    check(global.exists(), "contract not initialized");
+    auto stats = global.get();
+
     // check for context-free actions and other stuff
     auto action = better_get_action(0, 0);
     check(!action, "context-free actions are not allowed");
@@ -143,6 +147,7 @@ void thezeostoken::begin(
         check(a->account != "eosio"_n, "system contract actions are blacklisted!");
         check(a->name != "transfer"_n, "'transfer' actions are blacklisted!");
         // TODO: any more accounts/actions that should be blacklisted?
+        // TODO: change to whitelist of actions
 
         // in case of dummy_exec zaction collect public inputs (halo2 instances)
         if(has_exec_zactions(&(*a)))
@@ -215,8 +220,29 @@ void thezeostoken::begin(
         verifyproof("zeos", "thezeostoken"_n, "zeosorchard1"_n, proof, inputs);
     }
 
-    check(global.exists(), "contract not initialized");
-    auto stats = global.get();
+    // add transmitted notes to list of encrypted notes
+    if(notes.size() > 0)
+    {
+        // retrieve current block number
+        uint64_t bn = static_cast<uint64_t>(current_block_number());
+        encrypted_notes_t enc_notes(_self, _self.value);
+        for(uint64_t i = 0; i < notes.size(); ++i)
+        {
+            check(notes[i].epk_bytes.length()      ==  32 * 2, "length of string 'epk_bytes' must equal 64");
+            check(notes[i].enc_ciphertext.length() == 644 * 2, "length of string 'enc_ciphertext' must equal 1288");
+            check(notes[i].out_ciphertext.length() ==  80 * 2, "length of string 'out_ciphertext' must equal 160");
+            enc_notes.emplace(_self, [&](auto& row){
+                row.id = stats.note_count + i;
+                row.block_number = bn;
+                row.leaf_index = stats.leaf_count;
+                row.encrypted_note = notes[i];
+            });
+        }
+        // update global stats
+        stats.note_count += notes.size();
+    }
+
+    check(notes.size() == leaves.size(), "Number of transmitted 'notes' must equal number of leaves extraced from transmitted zactions");
 
     // add new note commitments to merkle tree
     if(leaves.size() > 0)
@@ -235,9 +261,7 @@ void thezeostoken::begin(
         }
     }
 
-    // TODO check num of enc notes equals leaves.size()
-    // TODO add enc notes to list
-
+    // update global stats
     global.set(stats, _self);
 
     // copy tx into singleton buffer where it remains only during its execution. The last 'step' frees the buffer.
@@ -419,7 +443,7 @@ void thezeostoken::init(
     require_auth(_self);
 
     // empty all tables (notes, mt, nf)
-    notes_t notes(_self, _self.value);
+    encrypted_notes_t notes(_self, _self.value);
     for(auto it = notes.begin(); it != notes.end(); )
         it = notes.erase(it);
     mt_t mt(_self, _self.value);
@@ -714,6 +738,34 @@ void thezeostoken::testmtupdate(
     auto g = global.get();
     update_merkle_tree(g.leaf_count, g.tree_depth, v_);
     global.set({0, g.leaf_count + num, g.tree_depth, deque<checksum256>()}, _self);
+}
+void thezeostoken::testaddnote(
+    const vector<TransmittedNoteCiphertext>& notes
+)
+{
+    // add transmitted notes to list of encrypted notes
+    if(notes.size() > 0)
+    {
+        auto stats = global.get();
+        // retrieve current block number
+        uint64_t bn = static_cast<uint64_t>(current_block_number());
+        encrypted_notes_t enc_notes(_self, _self.value);
+        for(uint64_t i = 0; i < notes.size(); ++i)
+        {
+            check(notes[i].epk_bytes.length()      ==  32 * 2, "length of string 'epk_bytes' must equal 64");
+            check(notes[i].enc_ciphertext.length() == 644 * 2, "length of string 'enc_ciphertext' must equal 1288");
+            check(notes[i].out_ciphertext.length() ==  80 * 2, "length of string 'out_ciphertext' must equal 160");
+            enc_notes.emplace(_self, [&](auto& row){
+                row.id = stats.note_count + i;
+                row.block_number = bn;
+                row.leaf_index = stats.leaf_count;
+                row.encrypted_note = notes[i];
+            });
+        }
+        // update global stats
+        stats.note_count += notes.size();
+        global.set(stats, _self);
+    }
 }
 
 bool thezeostoken::is_root_valid(
