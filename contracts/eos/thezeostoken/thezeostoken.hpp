@@ -105,7 +105,6 @@ CONTRACT_START()
     TABLE nullifier
     {
         checksum256 val;
-        uint64_t block_num;
 #ifdef USE_VRAM
         checksum256 primary_key() const { return val; }
     };
@@ -139,10 +138,10 @@ CONTRACT_START()
 
     TABLE global
     {
-        uint64_t note_count;            // number of encrypted notes
-        uint64_t mt_leaf_count;         // number of merkle tree leaves
-        uint64_t mt_depth;              // merkle tree depth
-        deque<checksum256> mt_roots;    // stores the most recent roots defined by MTS_NUM_ROOTS. the current root is always the first element
+        uint64_t note_count;        // number of encrypted notes
+        uint64_t leaf_count;        // number of merkle tree leaves
+        uint64_t tree_depth;        // merkle tree depth
+        deque<checksum256> roots;   // stores the most recent roots defined by MTS_NUM_ROOTS. the current root is always the first element
     };
     using g_t = singleton<"global"_n, global>;
     g_t global;
@@ -166,75 +165,122 @@ CONTRACT_START()
     };
     typedef eosio::multi_index<"stat"_n, currency_stats> stats;
     
-    void sub_balance(const name& owner,
-                     const asset& value);
+    void sub_balance(
+        const name& owner,
+        const asset& value
+    );
     
-    void add_balance(const name& owner,
-                     const asset& value,
-                     const name& ram_payer);
+    void add_balance(
+        const name& owner,
+        const asset& value,
+        const name& ram_payer
+    );
     
-    void update_merkle_tree(const uint64_t& leaf_count,
-                            const uint64_t& tree_depth,
-                            const vector<const uint8_t*>& leaves);
+    void update_merkle_tree(
+        const uint64_t& leaf_count,
+        const uint64_t& tree_depth,
+        const vector<const uint8_t*>& leaves
+    );
 
-    bool is_root_valid(const checksum256& root);
+    bool is_root_valid(
+        const checksum256& root
+    );
 
     public:
 
-    thezeostoken(name self,
-                 name code, 
-                 datastream<const char *> ds);
+    thezeostoken(
+        name self,
+        name code, 
+        datastream<const char *> ds
+    );
 
     // set verifier key
-    ACTION setvk(const name& code,
-                 const name& id,
-                 const string& vk);
+    ACTION setvk(
+        const name& code,
+        const name& id,
+        const string& vk
+    );
 
     // verify proof
-    ACTION verifyproof(const string& type,
-                       const name& code,
-                       const name& id,
-                       const string& proof,
-                       const string& inputs);
+    ACTION verifyproof(
+        const string& type,
+        const name& code,
+        const name& id,
+        const string& proof,
+        const string& inputs
+    );
 
     // execute transaction
-    ACTION begin(const string& proof, vector<action>& tx);
+    ACTION begin(
+        const string& proof,
+        vector<action>& tx
+    );
     ACTION step();
-    ACTION exec(const vector<zaction>& ztx);
-    ACTION test22(const vector<zaction>& ztx, const uint64_t& test22);
-    ACTION testmtupdate(const uint64_t& num);
-    void onfttransfer(name from, name to, asset quantity, string memo);
+    ACTION exec(
+        const vector<zaction>& ztx
+    );
+    ACTION test22(
+        const vector<zaction>& ztx,
+        const uint64_t& test22
+    );
+    ACTION testmtupdate(
+        const uint64_t& num
+    );
+    void onfttransfer(
+        name from,
+        name to,
+        asset quantity,
+        string memo
+    );
 
     // init
-    ACTION init(const uint64_t& tree_depth);
+    ACTION init(
+        const uint64_t& tree_depth
+    );
 
     // token contract actions
-    ACTION create(const name& issuer,
-                  const asset& maximum_supply);
+    ACTION create(
+        const name& issuer,
+        const asset& maximum_supply
+    );
 
-    ACTION issue(const name& to,
-                 const asset& quantity,
-                 const string& memo);
+    ACTION issue(
+        const name& to,
+        const asset& quantity,
+        const string& memo
+    );
     
-    ACTION retire(const asset& quantity,
-                  const string& memo);
+    ACTION retire(
+        const asset& quantity,
+        const string& memo
+    );
 
-    ACTION transfer(const name& from,
-                    const name& to,
-                    const asset& quantity,
-                    const string& memo);
+    ACTION transfer(
+        const name& from,
+        const name& to,
+        const asset& quantity,
+        const string& memo
+    );
 
-    ACTION open(const name& owner,
-                const symbol& symbol,
-                const name& ram_payer);
+    ACTION open(
+        const name& owner,
+        const symbol& symbol,
+        const name& ram_payer
+    );
 
-    ACTION close(const name& owner,
-                 const symbol& symbol);
+    ACTION close(
+        const name& owner,
+        const symbol& symbol
+    );
 
-    inline asset get_supply(const symbol_code& sym) const;
+    inline asset get_supply(
+        const symbol_code& sym
+    ) const;
     
-    inline asset get_balance(const name& owner,
-                             const symbol_code& sym) const;
+    inline asset get_balance(
+        const name& owner,
+        const symbol_code& sym
+    ) const;
     
 CONTRACT_END((setvk)(verifyproof)(begin)(step)(exec)(test22)(testmtupdate)(init)(create)(issue)(retire)(transfer)(open)(close)(xdcommit))
 /*

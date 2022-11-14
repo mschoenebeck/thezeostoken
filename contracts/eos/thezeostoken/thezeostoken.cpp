@@ -1,6 +1,10 @@
 #include "thezeostoken.hpp"
 
-thezeostoken::thezeostoken(name self, name code, datastream<const char *> ds) :
+thezeostoken::thezeostoken(
+    name self,
+    name code,
+    datastream<const char *> ds
+) :
     contract(self, code, ds),
     txb(_self, _self.value),
     ftb(_self, _self.value),
@@ -8,7 +12,11 @@ thezeostoken::thezeostoken(name self, name code, datastream<const char *> ds) :
 {
 }
 
-void thezeostoken::setvk(const name& code, const name& id, const string& vk)
+void thezeostoken::setvk(
+    const name& code,
+    const name& id,
+    const string& vk
+)
 {
     require_auth(code);
     
@@ -40,7 +48,13 @@ void thezeostoken::setvk(const name& code, const name& id, const string& vk)
     }
 }
 
-void thezeostoken::verifyproof(const string& type, const name& code, const name& id, const string& proof, const string& inputs)
+void thezeostoken::verifyproof(
+    const string& type,
+    const name& code,
+    const name& id,
+    const string& proof,
+    const string& inputs
+)
 {
     vk_t vks(get_self(), code.value);
     auto c = vks.find(id.value);
@@ -77,7 +91,9 @@ void thezeostoken::verifyproof(const string& type, const name& code, const name&
 }
 
 uint64_t dummy_mem[5] = {0xDEADBEEFDEADBEEF, 0xDEADBEEFDEADBEEF, 0xDEADBEEFDEADBEEF, 0xDEADBEEFDEADBEEF, 0xDEADBEEFDEADBEEF};
-inline bool has_exec_zactions(const action* a)
+inline bool has_exec_zactions(
+    const action* a
+)
 {
     return a->data.size() > (1 + sizeof(zaction::type) + ZI_SIZE + 1) &&    // ensure valid access for following checks 
            0 == memcmp(&a->data[1], dummy_mem, 40) &&                       // 5 times 0xDEADBEEFDEADBEEF check
@@ -85,7 +101,10 @@ inline bool has_exec_zactions(const action* a)
            a->data[1 + sizeof(zaction::type) + ZI_SIZE] == 0;               // memo field == ""?;
 }
 
-void thezeostoken::begin(const string& proof, vector<action>& tx)
+void thezeostoken::begin(
+    const string& proof,
+    vector<action>& tx
+)
 {
     // check for context-free actions and other stuff
     auto action = better_get_action(0, 0);
@@ -202,21 +221,21 @@ void thezeostoken::begin(const string& proof, vector<action>& tx)
     // add new note commitments to merkle tree
     if(leaves.size() > 0)
     {
-        update_merkle_tree(stats.mt_leaf_count, stats.mt_depth, leaves);
+        update_merkle_tree(stats.leaf_count, stats.tree_depth, leaves);
 
         // update global stats
-        stats.mt_leaf_count += leaves.size();
+        stats.leaf_count += leaves.size();
         mt_t tree(_self, _self.value);
-        auto root = tree.get(stats.mt_leaf_count / MT_NUM_LEAVES(stats.mt_depth));
-        stats.mt_roots.push_front(root.val);
+        auto root = tree.get(stats.leaf_count / MT_NUM_LEAVES(stats.tree_depth));
+        stats.roots.push_front(root.val);
         // only memorize the most recent x number of root nodes
-        if(stats.mt_roots.size() > G_ROOTS_FIFO_SIZE)
+        if(stats.roots.size() > G_ROOTS_FIFO_SIZE)
         {
-            stats.mt_roots.pop_back();
+            stats.roots.pop_back();
         }
     }
 
-    // TODO check num of enc notes is not more than leaves.size()
+    // TODO check num of enc notes equals leaves.size()
     // TODO add enc notes to list
 
     global.set(stats, _self);
@@ -257,7 +276,9 @@ void thezeostoken::step()
     }
 }
 
-void thezeostoken::exec(const vector<zaction>& ztx)
+void thezeostoken::exec(
+    const vector<zaction>& ztx
+)
 {
     // this action should only be executable by thezeostoken itself and never by third party contracts!
     // executing the same zactions more than once per proof could be abused
@@ -368,13 +389,21 @@ void thezeostoken::exec(const vector<zaction>& ztx)
     }
 }
 
-void thezeostoken::test22(const vector<zaction>& ztx, const uint64_t& test22)
+void thezeostoken::test22(
+    const vector<zaction>& ztx,
+    const uint64_t& test22
+)
 {
     require_auth("thezeostoken"_n);
     //check(test22 == 12345, test22);
 }
 
-void thezeostoken::onfttransfer(name from, name to, asset quantity, string memo)
+void thezeostoken::onfttransfer(
+    name from,
+    name to,
+    asset quantity,
+    string memo
+)
 {
     if(to == _self)
     {
@@ -383,7 +412,9 @@ void thezeostoken::onfttransfer(name from, name to, asset quantity, string memo)
     }
 }
 
-void thezeostoken::init(const uint64_t& tree_depth)
+void thezeostoken::init(
+    const uint64_t& tree_depth
+)
 {
     require_auth(_self);
 
@@ -400,9 +431,13 @@ void thezeostoken::init(const uint64_t& tree_depth)
     
     // reset global state
     global.set({0, 0, tree_depth, deque<checksum256>()}, _self);
+    //global.remove();
 }
 
-void thezeostoken::create(const name& issuer, const asset& maximum_supply)
+void thezeostoken::create(
+    const name& issuer,
+    const asset& maximum_supply
+)
 {
     require_auth(_self);
 
@@ -422,7 +457,11 @@ void thezeostoken::create(const name& issuer, const asset& maximum_supply)
     });
 }
 
-void thezeostoken::issue(const name& to, const asset& quantity, const string& memo)
+void thezeostoken::issue(
+    const name& to,
+    const asset& quantity,
+    const string& memo
+)
 {
     auto sym = quantity.symbol;
     check(sym.is_valid(), "invalid symbol name");
@@ -453,7 +492,10 @@ void thezeostoken::issue(const name& to, const asset& quantity, const string& me
     }
 }
 
-void thezeostoken::retire(const asset& quantity, const string& memo)
+void thezeostoken::retire(
+    const asset& quantity,
+    const string& memo
+)
 {
     auto sym = quantity.symbol;
     check(sym.is_valid(), "invalid symbol name");
@@ -477,7 +519,12 @@ void thezeostoken::retire(const asset& quantity, const string& memo)
     sub_balance(st.issuer, quantity);
 }
 
-void thezeostoken::transfer(const name& from, const name& to, const asset& quantity, const string& memo)
+void thezeostoken::transfer(
+    const name& from,
+    const name& to,
+    const asset& quantity,
+    const string& memo
+)
 {
     check(from != to, "cannot transfer to self");
     require_auth(from);
@@ -498,7 +545,11 @@ void thezeostoken::transfer(const name& from, const name& to, const asset& quant
     add_balance(to, quantity, from);
 }
 
-void thezeostoken::open(const name& owner, const symbol& symbol, const name& ram_payer)
+void thezeostoken::open(
+    const name& owner,
+    const symbol& symbol,
+    const name& ram_payer
+)
 {
     require_auth(ram_payer);
 
@@ -518,7 +569,10 @@ void thezeostoken::open(const name& owner, const symbol& symbol, const name& ram
     }
 }
 
-void thezeostoken::close(const name& owner, const symbol& symbol)
+void thezeostoken::close(
+    const name& owner,
+    const symbol& symbol
+)
 {
     require_auth(owner);
     accounts acnts(get_self(), owner.value);
@@ -528,7 +582,11 @@ void thezeostoken::close(const name& owner, const symbol& symbol)
     acnts.erase(it);
 }
 
-void thezeostoken::add_balance(const name& owner, const asset& value, const name& ram_payer)
+void thezeostoken::add_balance(
+    const name& owner,
+    const asset& value,
+    const name& ram_payer
+)
 {
     accounts to_acnts(_self, owner.value);
     auto to = to_acnts.find(value.symbol.code().raw());
@@ -543,7 +601,10 @@ void thezeostoken::add_balance(const name& owner, const asset& value, const name
     }
 }
 
-void thezeostoken::sub_balance(const name& owner, const asset& value)
+void thezeostoken::sub_balance(
+    const name& owner,
+    const asset& value
+)
 {
     accounts from_acnts(_self, owner.value);
     const auto& from = from_acnts.get(value.symbol.code().raw(), "no balance object found");
@@ -557,21 +618,30 @@ void thezeostoken::sub_balance(const name& owner, const asset& value)
     }
 }
 
-asset thezeostoken::get_supply(const symbol_code& sym) const
+asset thezeostoken::get_supply(
+    const symbol_code& sym
+) const
 {
     stats statstable(_self, sym.raw());
     const auto& st = statstable.get(sym.raw());
     return st.supply;
 }
 
-asset thezeostoken::get_balance(const name& owner, const symbol_code& sym) const
+asset thezeostoken::get_balance(
+    const name& owner,
+    const symbol_code& sym
+) const
 {
     accounts accountstable(_self, owner.value);
     const auto& ac = accountstable.get(sym.raw());
     return ac.balance;
 }
 
-void thezeostoken::update_merkle_tree(const uint64_t& leaf_count, const uint64_t& tree_depth, const vector<const uint8_t*>& leaves)
+void thezeostoken::update_merkle_tree(
+    const uint64_t& leaf_count,
+    const uint64_t& tree_depth,
+    const vector<const uint8_t*>& leaves
+)
 {
     // build uri string by concatening all input parameters for the vcpu handler
     string str = "zeos_merkle_tree_updater://";
@@ -628,7 +698,9 @@ void thezeostoken::update_merkle_tree(const uint64_t& leaf_count, const uint64_t
         }
     }
 }
-void thezeostoken::testmtupdate(const uint64_t& num)
+void thezeostoken::testmtupdate(
+    const uint64_t& num
+)
 {
     // create vector with <num> empty leaves
     array<uint8_t, 32> nc = array<uint8_t, 32>{249, 255, 255, 255, 132, 169, 195, 207, 62, 48, 229, 190, 27, 209, 17, 16, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 63};
@@ -640,11 +712,13 @@ void thezeostoken::testmtupdate(const uint64_t& num)
         v_.push_back(v[i].data());
     // fetch global stats, add leaves, and update global stats
     auto g = global.get();
-    update_merkle_tree(g.mt_leaf_count, g.mt_depth, v_);
-    global.set({0, g.mt_leaf_count + num, g.mt_depth, deque<checksum256>()}, _self);
+    update_merkle_tree(g.leaf_count, g.tree_depth, v_);
+    global.set({0, g.leaf_count + num, g.tree_depth, deque<checksum256>()}, _self);
 }
 
-bool thezeostoken::is_root_valid(const checksum256& root)
+bool thezeostoken::is_root_valid(
+    const checksum256& root
+)
 {
     // a root is valid if it is the root of an existing full merkle tree OR in the queue
     // of the most recent roots of the current merkle tree
@@ -652,7 +726,7 @@ bool thezeostoken::is_root_valid(const checksum256& root)
     // check if root is in deque of most recent roots
     auto state = global.get();
 
-    for(auto r = state.mt_roots.begin(); r != state.mt_roots.end(); ++r)
+    for(auto r = state.roots.begin(); r != state.roots.end(); ++r)
     {
         if(*r == root)
         {
@@ -661,13 +735,13 @@ bool thezeostoken::is_root_valid(const checksum256& root)
     }
     
     // check roots of previous, full merkle trees (tree_index > 0)
-    uint64_t tree_idx = state.mt_leaf_count / MT_NUM_LEAVES(state.mt_depth);
+    uint64_t tree_idx = state.leaf_count / MT_NUM_LEAVES(state.tree_depth);
 
     mt_t tree(_self, _self.value);
     for(uint64_t t = 0; t < tree_idx; ++t)
     {
         // can use get here because root must exist if this tree has a leaf
-        auto it = tree.get(t * MT_ARR_FULL_TREE_OFFSET(state.mt_depth));
+        auto it = tree.get(t * MT_ARR_FULL_TREE_OFFSET(state.tree_depth));
         
         if(it.val == root)
         {
