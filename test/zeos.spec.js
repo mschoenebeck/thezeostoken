@@ -434,7 +434,7 @@ describe(`ZEOS Test`, async () => {
       try {
         // call init() and set merkle tree depth to 32
         var res = await testcontract.init({
-            tree_depth: 5
+            tree_depth: 4
           }, {
           authorization: `${code}@active`,
           broadcast: true,
@@ -448,7 +448,7 @@ describe(`ZEOS Test`, async () => {
           body: JSON.stringify({ code: 'thezeostoken', table: 'global', scope: 'thezeostoken' })
         });
         var resJson = await res.json();
-        assert.equal(resJson.rows[0].substr(32, 2), "05");
+        assert.equal(resJson.rows[0].substr(32, 2), "04");
 
         done();
       }

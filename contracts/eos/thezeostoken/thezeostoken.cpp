@@ -7,7 +7,7 @@ thezeostoken::thezeostoken(
 ) :
     contract(self, code, ds),
     txb(_self, _self.value),
-    ftb(_self, _self.value),
+    ab(_self, _self.value),
     global(_self, _self.value)
 {
 }
@@ -307,7 +307,6 @@ void thezeostoken::exec(
     // this action should only be executable by thezeostoken itself and never by third party contracts!
     // executing the same zactions more than once per proof could be abused
     require_auth(_self);
-    //check(0, "exec!");
 
     for(auto za = ztx.begin(); za != ztx.end(); ++za)
     {
@@ -325,13 +324,16 @@ void thezeostoken::exec(
             case ZA_MINTFT:
             {
                 // TODO all the other checks for TRANSFERFT (ZEOS Book)
-                check(ftb.exists(), "ZA_MINTFT: deposit required before mint");
-                auto funds = ftb.get();
-                check(za->ins.b_d1 == funds.quantity.quantity.amount, "ZA_MINTFT: wrong amount");
-                check(za->ins.b_d2 == funds.quantity.quantity.symbol.raw(), "ZA_MINTFT: wrong symbol");
-                check(za->ins.b_sc == funds.quantity.contract.value, "ZA_MINTFT: wrong contract");
+                check(ab.exists(), "ZA_MINTFT: deposit required before mint");
+                auto l = ab.get().assets;
+                auto asset = l.front();
+                check(za->ins.b_d1 == asset.quantity.amount, "ZA_MINTFT: wrong amount. Expected: " + to_string(asset.quantity.amount) + " Provided: " + to_string(za->ins.b_d1));
+                check(za->ins.b_d2 == asset.quantity.symbol.raw(), "ZA_MINTFT: wrong symbol. Expected: " + to_string(asset.quantity.symbol.raw()) + " Provided: " + to_string(za->ins.b_d2));
+                check(za->ins.b_sc == asset.contract.value, "ZA_MINTFT: wrong contract. Expected: " + to_string(asset.contract.value) + " Provided: " + to_string(za->ins.b_sc));
                 // clear buffer
-                ftb.remove();
+                l.pop_front();
+                if(l.empty())
+                    ab.remove();
                 break;
             }
             
@@ -422,7 +424,7 @@ void thezeostoken::test22(
     //check(test22 == 12345, test22);
 }
 
-void thezeostoken::onfttransfer(
+void thezeostoken::ontransfer(
     name from,
     name to,
     asset quantity,
@@ -432,7 +434,9 @@ void thezeostoken::onfttransfer(
     if(to == _self)
     {
         // buffer quantity & owner contract
-        ftb.set({extended_asset(quantity, get_first_receiver())}, _self);
+        auto l = ab.get_or_default({list<extended_asset>()}).assets;
+        l.push_back(extended_asset(quantity, get_first_receiver()));
+        ab.set({l}, _self);
     }
 }
 

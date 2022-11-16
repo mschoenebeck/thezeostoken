@@ -144,13 +144,13 @@ CONTRACT_START()
     using txb_t = singleton<"txbuffer"_n, txbuffer>;
     txb_t txb;
 
-    // buffers a quantity of fungible tokens
-    TABLE ftbuffer
+    // buffers a set of assets for (batch) minting
+    TABLE assetbuffer
     {
-        extended_asset quantity;
+        list<extended_asset> assets;
     };
-    using ftb_t = singleton<"ftbuffer"_n, ftbuffer>;
-    ftb_t ftb;
+    using assetb_t = singleton<"assetbuffer"_n, assetbuffer>;
+    assetb_t ab;
 
     TABLE global
     {
@@ -246,7 +246,7 @@ CONTRACT_START()
     ACTION testaddnote(
         const vector<TransmittedNoteCiphertext>& notes
     );
-    void onfttransfer(
+    void ontransfer(
         name from,
         name to,
         asset quantity,
@@ -302,8 +302,8 @@ CONTRACT_START()
         const symbol_code& sym
     ) const;
     
-CONTRACT_END((setvk)(verifyproof)(begin)(step)(exec)(test22)(testmtupdate)(testaddnote)(init)(create)(issue)(retire)(transfer)(open)(close)(xdcommit))
-/*
+//CONTRACT_END((setvk)(verifyproof)(begin)(step)(exec)(test22)(testmtupdate)(testaddnote)(init)(create)(issue)(retire)(transfer)(open)(close)(xdcommit))
+
 };
 
 extern "C"
@@ -319,11 +319,10 @@ extern "C"
             switch(action)
             {
                 EOSIO_DISPATCH_HELPER(CONTRACT_NAME(), DAPPSERVICE_ACTIONS_COMMANDS())
-                EOSIO_DISPATCH_HELPER(CONTRACT_NAME(), (setvk)(verifyproof)(begin)(step)(exec)(test22)(init)(create)(issue)(retire)(transfer)(open)(close))
+                EOSIO_DISPATCH_HELPER(CONTRACT_NAME(), (setvk)(verifyproof)(begin)(step)(exec)(test22)(testmtupdate)(testaddnote)(init)(create)(issue)(retire)(transfer)(open)(close))
                 EOSIO_DISPATCH_HELPER(CONTRACT_NAME(), (xsignal))
             }
         }
         eosio_exit(0);
     }
 }
-*/
