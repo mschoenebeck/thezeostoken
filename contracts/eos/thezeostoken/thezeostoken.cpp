@@ -161,15 +161,15 @@ void thezeostoken::begin(
                 {
                     case ZA_TRANSFERFT:
                     {   // CMB and CMC
-                        leaves.push_back(reinterpret_cast<const uint8_t*>(ptr + ZI_SIZE - 64));
-                        leaves.push_back(reinterpret_cast<const uint8_t*>(ptr + ZI_SIZE - 32));
+                        leaves.push_back(reinterpret_cast<const uint8_t*>(ptr + ZI_SIZE - (32 + 32 + 8 + 8)));
+                        leaves.push_back(reinterpret_cast<const uint8_t*>(ptr + ZI_SIZE - (32 + 8 + 8)));
                         inputs.append(byte2str<ZI_SIZE>(reinterpret_cast<const uint8_t*>(ptr)));
                         break;
                     }
                     case ZA_BURNFT:
                     {
                         // only CMC
-                        leaves.push_back(reinterpret_cast<const uint8_t*>(ptr + ZI_SIZE - 32));
+                        leaves.push_back(reinterpret_cast<const uint8_t*>(ptr + ZI_SIZE - (32 + 8 + 8)));
                         inputs.append(byte2str<ZI_SIZE>(reinterpret_cast<const uint8_t*>(ptr)));
                         break;
                     }
@@ -179,27 +179,24 @@ void thezeostoken::begin(
                     case ZA_TRANSFERNFT:
                     {
                         // only CMB
-                        leaves.push_back(reinterpret_cast<const uint8_t*>(ptr + ZI_SIZE - 64));
+                        leaves.push_back(reinterpret_cast<const uint8_t*>(ptr + ZI_SIZE - (32 + 32 + 8 + 8)));
+                        inputs.append(byte2str<ZI_SIZE>(reinterpret_cast<const uint8_t*>(ptr)));
+                        break;
+                    }
+                    // only collect inputs (no leaves) for proof verification
+                    case ZA_NULL:
+                    {
                         inputs.append(byte2str<ZI_SIZE>(reinterpret_cast<const uint8_t*>(ptr)));
                         break;
                     }
                     // don't collect inputs if zaction type is ZA_MINTAUTH because it does not require a zero knowledge proof
                     case ZA_MINTAUTH:
                     case ZA_DUMMY:
-                    case ZA_NULL:
                     default:
                     {
                         break;
                     }
                 }
-
-                /*
-                // don't collect inputs if zaction type is ZA_MINTAUTH because it does not require a zero knowledge proof
-                if(ZA_MINTAUTH != *reinterpret_cast<const uint64_t*>(ptr - sizeof(zaction::type)))
-                {
-                    inputs.append(byte2str<ZI_SIZE>(reinterpret_cast<const uint8_t*>(ptr)));
-                }
-                */
 
                 ptr += ZI_SIZE;
                 ptr += *reinterpret_cast<const uint8_t*>(ptr) + 1 + sizeof(zaction::type);
@@ -413,15 +410,6 @@ void thezeostoken::exec(
             }
         }
     }
-}
-
-void thezeostoken::test22(
-    const vector<zaction>& ztx,
-    const uint64_t& test22
-)
-{
-    require_auth("thezeostoken"_n);
-    //check(test22 == 12345, test22);
 }
 
 void thezeostoken::ontransfer(

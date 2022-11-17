@@ -236,10 +236,6 @@ CONTRACT_START()
     ACTION exec(
         const vector<zaction>& ztx
     );
-    ACTION test22(
-        const vector<zaction>& ztx,
-        const uint64_t& test22
-    );
     ACTION testmtupdate(
         const uint64_t& num
     );
@@ -302,7 +298,7 @@ CONTRACT_START()
         const symbol_code& sym
     ) const;
     
-//CONTRACT_END((setvk)(verifyproof)(begin)(step)(exec)(test22)(testmtupdate)(testaddnote)(init)(create)(issue)(retire)(transfer)(open)(close)(xdcommit))
+//CONTRACT_END((setvk)(verifyproof)(begin)(step)(exec)(testmtupdate)(testaddnote)(init)(create)(issue)(retire)(transfer)(open)(close)(xdcommit))
 
 };
 
@@ -319,7 +315,7 @@ extern "C"
             switch(action)
             {
                 EOSIO_DISPATCH_HELPER(CONTRACT_NAME(), DAPPSERVICE_ACTIONS_COMMANDS())
-                EOSIO_DISPATCH_HELPER(CONTRACT_NAME(), (setvk)(verifyproof)(begin)(step)(exec)(test22)(testmtupdate)(testaddnote)(init)(create)(issue)(retire)(transfer)(open)(close))
+                EOSIO_DISPATCH_HELPER(CONTRACT_NAME(), (setvk)(verifyproof)(begin)(step)(exec)(testmtupdate)(testaddnote)(init)(create)(issue)(retire)(transfer)(open)(close))
                 EOSIO_DISPATCH_HELPER(CONTRACT_NAME(), (xsignal))
             }
         }
