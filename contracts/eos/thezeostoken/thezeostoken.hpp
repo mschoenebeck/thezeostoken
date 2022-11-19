@@ -94,11 +94,11 @@ CONTRACT_START()
         uint64_t primary_key() const { return id; }
     };
 #ifdef USE_VRAM
-    typedef dapp::advanced_multi_index<"notes"_n, TransmittedNoteCiphertextEx, uint64_t> encrypted_notes_t;
+    typedef dapp::advanced_multi_index<"notes"_n, TransmittedNoteCiphertextEx, uint64_t> en_t;
     typedef eosio::multi_index<".notes"_n, TransmittedNoteCiphertextEx> encrypted_notes_t_v_abi;
     typedef eosio::multi_index<"notes"_n, shardbucket> encrypted_notes_t_abi;
 #else
-    typedef eosio::multi_index<"noteseosram"_n, TransmittedNoteCiphertextEx> encrypted_notes_t;
+    typedef eosio::multi_index<"noteseosram"_n, TransmittedNoteCiphertextEx> en_t;
 #endif
 
     // zeos note commitments merkle tree table

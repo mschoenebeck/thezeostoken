@@ -222,7 +222,7 @@ void thezeostoken::begin(
     {
         // retrieve current block number
         uint64_t bn = static_cast<uint64_t>(current_block_number());
-        encrypted_notes_t enc_notes(_self, _self.value);
+        en_t enc_notes(_self, _self.value);
         for(uint64_t i = 0; i < notes.size(); ++i)
         {
             check(notes[i].epk_bytes.length()      ==  32 * 2, "length of string 'epk_bytes' must equal 64");
@@ -426,20 +426,23 @@ void thezeostoken::init(
 {
     require_auth(_self);
 
-    // empty all tables (notes, mt, nf)
-    encrypted_notes_t notes(_self, _self.value);
-    for(auto it = notes.begin(); it != notes.end(); )
-        it = notes.erase(it);
+    // empty all tables (en, mt, nf, rt)
+    en_t en(_self, _self.value);
+    for(auto it = en.begin(); it != en.end(); )
+        it = en.erase(it);
     mt_t mt(_self, _self.value);
     for(auto it = mt.begin(); it != mt.end(); )
         it = mt.erase(it);
     nf_t nf(_self, _self.value);
     for(auto it = nf.begin(); it != nf.end(); )
         it = nf.erase(it);
+    rt_t rt(_self, _self.value);
+    for(auto it = rt.begin(); it != rt.end(); )
+        it = rt.erase(it);
     
     // reset global state
+    global.remove();
     global.set({0, 0, tree_depth}, _self);
-    //global.remove();
 }
 
 void thezeostoken::create(
@@ -761,7 +764,7 @@ void thezeostoken::testaddnote(
         auto stats = global.get();
         // retrieve current block number
         uint64_t bn = static_cast<uint64_t>(current_block_number());
-        encrypted_notes_t enc_notes(_self, _self.value);
+        en_t enc_notes(_self, _self.value);
         for(uint64_t i = 0; i < notes.size(); ++i)
         {
             check(notes[i].epk_bytes.length()      ==  32 * 2, "length of string 'epk_bytes' must equal 64");
