@@ -248,14 +248,6 @@ void thezeostoken::begin(
 
         // update global stats
         stats.leaf_count += leaves.size();
-        mt_t tree(_self, _self.value);
-        auto root = tree.get(stats.leaf_count / MT_NUM_LEAVES(stats.tree_depth));
-        stats.roots.push_front(root.val);
-        // only memorize the most recent x number of root nodes
-        if(stats.roots.size() > G_ROOTS_FIFO_SIZE)
-        {
-            stats.roots.pop_back();
-        }
     }
 
     // update global stats
@@ -347,7 +339,7 @@ void thezeostoken::exec(
                 // TODO all the other checks for TRANSFERFT (ZEOS Book)
                 // check if nullifier already exists in list, if not add it
                 nf_t nf(_self, _self.value);
-                auto it = nf.find((uint64_t)*((uint32_t*)za->ins.nf.extract_as_byte_array().data()));
+                auto it = nf.find(*reinterpret_cast<uint64_t*>(za->ins.nf.extract_as_byte_array().data()));
                 check(it == nf.end(), "ZA_TRANSFERFT: nullifier exists => note has been spent already");
                 nf.emplace(_self, [&](auto& n) {
                     n.val = za->ins.nf;
@@ -368,7 +360,7 @@ void thezeostoken::exec(
                 // TODO all the other checks for BURNFT (ZEOS Book)
                 // check if nullifier already exists in list, if not add it
                 nf_t nf(_self, _self.value);
-                auto it = nf.find((uint64_t)*((uint32_t*)za->ins.nf.extract_as_byte_array().data()));
+                auto it = nf.find(*reinterpret_cast<uint64_t*>(za->ins.nf.extract_as_byte_array().data()));
                 check(it == nf.end(), "ZA_BURNFT: nullifier exists => note has been spent already");
                 nf.emplace(_self, [&](auto& n) {
                     n.val = za->ins.nf;
@@ -385,7 +377,7 @@ void thezeostoken::exec(
                 // TODO all the other checks for BURNFT2 (ZEOS Book)
                 // check if nullifier already exists in list, if not add it
                 nf_t nf(_self, _self.value);
-                auto it = nf.find((uint64_t)*((uint32_t*)za->ins.nf.extract_as_byte_array().data()));
+                auto it = nf.find(*reinterpret_cast<uint64_t*>(za->ins.nf.extract_as_byte_array().data()));
                 check(it == nf.end(), "ZA_BURNFT: nullifier exists => note has been spent already");
                 nf.emplace(_self, [&](auto& n) {
                     n.val = za->ins.nf;
@@ -446,7 +438,7 @@ void thezeostoken::init(
         it = nf.erase(it);
     
     // reset global state
-    global.set({0, 0, tree_depth, deque<checksum256>()}, _self);
+    global.set({0, 0, tree_depth}, _self);
     //global.remove();
 }
 
@@ -687,8 +679,16 @@ void thezeostoken::update_merkle_tree(
         return first;
     });
 
+    // determine root indices: the current tree root (rt1) changes anyways. in case the tree overflows into a new one
+    // we need to add the second root (rt2) of the new tree as well
+    uint64_t rt1_tree_idx =  leaf_count                  / MT_NUM_LEAVES(tree_depth);
+    uint64_t rt2_tree_idx = (leaf_count + leaves.size()) / MT_NUM_LEAVES(tree_depth);
+    uint64_t rt1_idx = rt1_tree_idx * MT_ARR_FULL_TREE_OFFSET(tree_depth);
+    uint64_t rt2_idx = rt2_tree_idx * MT_ARR_FULL_TREE_OFFSET(tree_depth);
+
     // modify/insert nodes (40 bytes each) into tree
     mt_t tree(_self, _self.value);
+    rt_t roots(_self, _self.value);
     check(res.size() % 40 == 0, "Node list must be multiple of 40 bytes: 8 bytes 'index', 32 bytes 'value'");
     for(int i = 0; i < res.size()/40; i++)
     {
@@ -712,6 +712,21 @@ void thezeostoken::update_merkle_tree(
                 row.val = val;
             });
         }
+
+        // add root node to 'roots' table
+        if((*idx_ptr & 0x7FFFFFFFFFFFFFFF) == rt1_idx)
+        {
+            roots.emplace(_self, [&](auto& row) {
+                row.val = val;
+            });
+        }
+        // in case of tree overflow add second root at root2 index as well
+        if(rt2_idx != rt1_idx && (*idx_ptr & 0x7FFFFFFFFFFFFFFF) == rt2_idx)
+        {
+            roots.emplace(_self, [&](auto& row) {
+                row.val = val;
+            });
+        }
     }
 }
 void thezeostoken::testmtupdate(
@@ -719,7 +734,9 @@ void thezeostoken::testmtupdate(
 )
 {
     // create vector with <num> empty leaves
-    array<uint8_t, 32> nc = array<uint8_t, 32>{249, 255, 255, 255, 132, 169, 195, 207, 62, 48, 229, 190, 27, 209, 17, 16, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 63};
+    //array<uint8_t, 32> nc = array<uint8_t, 32>{249, 255, 255, 255, 132, 169, 195, 207, 62, 48, 229, 190, 27, 209, 17, 16, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 63};
+    // create vector with <num> pseudo random leaves
+    array<uint8_t, 32> nc = array<uint8_t, 32>{static_cast<unsigned char>(13*num%256), 255, 255, 255, 132, 169, 195, 207, 62, 48, 229, 190, 27, 209, 17, 16, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 63};
     vector<array<uint8_t, 32> > v;
     for(int i = 0; i < num; i++)
         v.push_back(nc);
@@ -727,9 +744,12 @@ void thezeostoken::testmtupdate(
     for(int i = 0; i < num; i++)
         v_.push_back(v[i].data());
     // fetch global stats, add leaves, and update global stats
+    check(global.exists(), "need to call init first");
     auto g = global.get();
     update_merkle_tree(g.leaf_count, g.tree_depth, v_);
-    global.set({0, g.leaf_count + num, g.tree_depth, deque<checksum256>()}, _self);
+    // update global stats
+    g.leaf_count += v_.size();
+    global.set(g, _self);
 }
 void thezeostoken::testaddnote(
     const vector<TransmittedNoteCiphertext>& notes
@@ -764,35 +784,7 @@ bool thezeostoken::is_root_valid(
     const checksum256& root
 )
 {
-    // a root is valid if it is the root of an existing full merkle tree OR in the queue
-    // of the most recent roots of the current merkle tree
-    
-    // check if root is in deque of most recent roots
-    auto state = global.get();
-
-    for(auto r = state.roots.begin(); r != state.roots.end(); ++r)
-    {
-        if(*r == root)
-        {
-            return true;
-        }
-    }
-    
-    // check roots of previous, full merkle trees (tree_index > 0)
-    uint64_t tree_idx = state.leaf_count / MT_NUM_LEAVES(state.tree_depth);
-
-    mt_t tree(_self, _self.value);
-    for(uint64_t t = 0; t < tree_idx; ++t)
-    {
-        // can use get here because root must exist if this tree has a leaf
-        auto it = tree.get(t * MT_ARR_FULL_TREE_OFFSET(state.tree_depth));
-        
-        if(it.val == root)
-        {
-            return true;
-        }
-    }
-    
-    // root was not found
-    return false;
+    rt_t roots(_self, _self.value);
+    auto it = roots.find(*reinterpret_cast<uint64_t*>(root.extract_as_byte_array().data()));
+    return it != roots.end();
 }

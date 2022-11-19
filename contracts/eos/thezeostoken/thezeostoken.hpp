@@ -83,8 +83,8 @@ CONTRACT_START()
     typedef eosio::multi_index<"vk"_n, vk> vk_t;
 
     // List of all transmitted notes in encrypted form.
-    // equivalent to EOSTransmittedNoteCiphertext of lib.rs (zeos-orchard)
-    TABLE EOSTransmittedNoteCiphertext
+    // equivalent to TransmittedNoteCiphertextEx of contract.rs (zeos-orchard)
+    TABLE TransmittedNoteCiphertextEx
     {
         uint64_t id;
         uint64_t block_number;
@@ -94,11 +94,11 @@ CONTRACT_START()
         uint64_t primary_key() const { return id; }
     };
 #ifdef USE_VRAM
-    typedef dapp::advanced_multi_index<"notes"_n, EOSTransmittedNoteCiphertext, uint64_t> encrypted_notes_t;
-    typedef eosio::multi_index<".notes"_n, EOSTransmittedNoteCiphertext> encrypted_notes_t_v_abi;
+    typedef dapp::advanced_multi_index<"notes"_n, TransmittedNoteCiphertextEx, uint64_t> encrypted_notes_t;
+    typedef eosio::multi_index<".notes"_n, TransmittedNoteCiphertextEx> encrypted_notes_t_v_abi;
     typedef eosio::multi_index<"notes"_n, shardbucket> encrypted_notes_t_abi;
 #else
-    typedef eosio::multi_index<"noteseosram"_n, EOSTransmittedNoteCiphertext> encrypted_notes_t;
+    typedef eosio::multi_index<"noteseosram"_n, TransmittedNoteCiphertextEx> encrypted_notes_t;
 #endif
 
     // zeos note commitments merkle tree table
@@ -121,18 +121,21 @@ CONTRACT_START()
     TABLE nullifier
     {
         checksum256 val;
-#ifdef USE_VRAM
-        checksum256 primary_key() const { return val; }
+
+        // use the lower 64 bits of the hash as primary key since collisions are very unlikely
+        uint64_t primary_key() const { return *reinterpret_cast<uint64_t*>(val.extract_as_byte_array().data()); }
     };
-    typedef dapp::advanced_multi_index<"nf"_n, nullifier, checksum256> nf_t;
-    typedef eosio::multi_index<".nf"_n, nullifier> nf_t_v_abi;
-    typedef eosio::multi_index<"nf"_n, shardbucket> nf_t_abi;
-#else
-        // on eos just use the lower 64 bits of the hash as primary key since collisions are very unlikely
-        uint64_t primary_key() const { return (uint64_t)*((uint32_t*)val.extract_as_byte_array().data()); }
+    typedef eosio::multi_index<"nullifiers"_n, nullifier> nf_t;
+
+    // zeos roots table
+    TABLE root
+    {
+        checksum256 val;
+
+        // use the lower 64 bits of the hash as primary key since collisions are very unlikely
+        uint64_t primary_key() const { return *reinterpret_cast<uint64_t*>(val.extract_as_byte_array().data()); }
     };
-    typedef eosio::multi_index<"nfeosram"_n, nullifier> nf_t;
-#endif
+    typedef eosio::multi_index<"roots"_n, root> rt_t;
 
     // buffers an entire tx for the time of execution
     TABLE txbuffer
@@ -157,7 +160,6 @@ CONTRACT_START()
         uint64_t note_count;        // number of encrypted notes
         uint64_t leaf_count;        // number of merkle tree leaves
         uint64_t tree_depth;        // merkle tree depth
-        deque<checksum256> roots;   // stores the most recent roots defined by MTS_NUM_ROOTS. the current root is always the first element
     };
     using g_t = singleton<"global"_n, global>;
     g_t global;
