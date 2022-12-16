@@ -115,13 +115,12 @@ describe(`ZEOS Test`, async () => {
         
         // fetch vk back from liquidstorage and check if it's correct
         var vk_ipfs = result.uri.substr(7);
-        res = await fetch(endpoint + '/v1/dsp/liquidstorag/get_uri', {
-            method: 'POST',
-            mode: 'cors',
-            body: JSON.stringify({ uri: 'ipfs://' + vk_ipfs })
+        res = await fetch(endpoint + '/v1/dsp/liquidstorag/get_uri?uri=ipfs://' + vk_ipfs, {
+            method: 'GET',
+            mode: 'cors'
         });
-        resJson = await res.json();
-        var vk_str = Buffer.from(resJson.data, 'base64').toString();
+        var vk_str = await res.arrayBuffer();
+        vk_str = Buffer.from(new Uint8Array(vk_str)).toString();
         assert.equal(vk_str, data);
   
         done();

@@ -117,7 +117,7 @@ CONTRACT_START()
     typedef eosio::multi_index<"mteosram"_n, merkle_node> mt_t;
 #endif
 
-    // zeos nullifier table
+    // nullifier table
     TABLE nullifier
     {
         checksum256 val;
@@ -127,7 +127,7 @@ CONTRACT_START()
     };
     typedef eosio::multi_index<"nullifiers"_n, nullifier> nf_t;
 
-    // zeos roots table
+    // roots table
     TABLE root
     {
         checksum256 val;
