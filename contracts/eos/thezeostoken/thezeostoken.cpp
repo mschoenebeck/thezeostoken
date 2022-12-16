@@ -737,9 +737,9 @@ void thezeostoken::testmtupdate(
 )
 {
     // create vector with <num> empty leaves
-    array<uint8_t, 32> nc = array<uint8_t, 32>{249, 255, 255, 255, 132, 169, 195, 207, 62, 48, 229, 190, 27, 209, 17, 16, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 63};
-    // create vector with <num> pseudo random leaves
-    //array<uint8_t, 32> nc = array<uint8_t, 32>{static_cast<unsigned char>(13*num%256), 255, 255, 255, 132, 169, 195, 207, 62, 48, 229, 190, 27, 209, 17, 16, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 63};
+    //array<uint8_t, 32> nc = array<uint8_t, 32>{249, 255, 255, 255, 132, 169, 195, 207, 62, 48, 229, 190, 27, 209, 17, 16, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 63};
+    // create vector with <num> leaves
+    array<uint8_t, 32> nc = array<uint8_t, 32>{static_cast<uint8_t>(num), 255, 255, 255, 132, 169, 195, 207, 62, 48, 229, 190, 27, 209, 17, 16, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 63};
     vector<array<uint8_t, 32> > v;
     for(int i = 0; i < num; i++)
         v.push_back(nc);
