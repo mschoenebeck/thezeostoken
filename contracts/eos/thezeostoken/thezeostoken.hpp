@@ -12,7 +12,7 @@
 #include "../dappservices/oracle.hpp"
 #include "../../../../zeosio/include/zeosio.hpp"
 #include <optional>
-
+#include <map>
 using namespace zeosio::halo2;
 using namespace eosio;
 using namespace std;
@@ -88,7 +88,6 @@ CONTRACT_START()
     {
         uint64_t id;
         uint64_t block_number;
-        uint64_t leaf_index;
         TransmittedNoteCiphertext encrypted_note;
         
         uint64_t primary_key() const { return id; }
@@ -108,13 +107,14 @@ CONTRACT_START()
         checksum256 val;
 
         uint64_t primary_key() const { return idx; }
+        checksum256 by_value() const { return val; }
     };
 #ifdef USE_VRAM
-    typedef dapp::advanced_multi_index<"mt"_n, merkle_node, uint64_t> mt_t;
+    typedef dapp::advanced_multi_index<"mt"_n, merkle_node, uint64_t, indexed_by<"byval"_n, const_mem_fun<merkle_node, checksum256, &merkle_node::by_value>>> mt_t;
     typedef eosio::multi_index<".mt"_n, merkle_node> mt_t_v_abi;
     typedef eosio::multi_index<"mt"_n, shardbucket> mt_t_abi;
 #else
-    typedef eosio::multi_index<"mteosram"_n, merkle_node> mt_t;
+    typedef eosio::multi_index<"mteosram"_n, merkle_node, indexed_by<"byval"_n, const_mem_fun<merkle_node, checksum256, &merkle_node::by_value>>> mt_t;
 #endif
 
     // nullifier table

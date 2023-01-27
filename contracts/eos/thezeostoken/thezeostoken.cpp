@@ -231,7 +231,6 @@ void thezeostoken::begin(
             enc_notes.emplace(_self, [&](auto& row){
                 row.id = stats.note_count + i;
                 row.block_number = bn;
-                row.leaf_index = stats.leaf_count;
                 row.encrypted_note = notes[i];
             });
         }
@@ -736,13 +735,20 @@ void thezeostoken::testmtupdate(
     const uint64_t& num
 )
 {
-    // create vector with <num> empty leaves
-    //array<uint8_t, 32> nc = array<uint8_t, 32>{249, 255, 255, 255, 132, 169, 195, 207, 62, 48, 229, 190, 27, 209, 17, 16, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 63};
-    // create vector with <num> leaves
-    array<uint8_t, 32> nc = array<uint8_t, 32>{static_cast<uint8_t>(num), 255, 255, 255, 132, 169, 195, 207, 62, 48, 229, 190, 27, 209, 17, 16, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 63};
     vector<array<uint8_t, 32> > v;
-    for(int i = 0; i < num; i++)
-        v.push_back(nc);
+    if(num == 0)
+    {
+        // create vector with one empty leaf
+        array<uint8_t, 32> nc_empty = array<uint8_t, 32>{249, 255, 255, 255, 132, 169, 195, 207, 62, 48, 229, 190, 27, 209, 17, 16, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 63};
+        v.push_back(nc_empty);
+    }
+    else
+    {
+        // create vector with <num> leaves
+        array<uint8_t, 32> nc = array<uint8_t, 32>{static_cast<uint8_t>(num), 255, 255, 255, 132, 169, 195, 207, 62, 48, 229, 190, 27, 209, 17, 16, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 63};
+        for(int i = 0; i < num; i++)
+            v.push_back(nc);
+    }
     vector<const uint8_t*> v_;
     for(int i = 0; i < num; i++)
         v_.push_back(v[i].data());
@@ -773,7 +779,6 @@ void thezeostoken::testaddnote(
             enc_notes.emplace(_self, [&](auto& row){
                 row.id = stats.note_count + i;
                 row.block_number = bn;
-                row.leaf_index = stats.leaf_count;
                 row.encrypted_note = notes[i];
             });
         }
