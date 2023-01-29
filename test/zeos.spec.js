@@ -431,7 +431,7 @@ describe(`ZEOS Test`, async () => {
   it('ZEOS merkle tree init', done => {
     (async () => {
       try {
-        // call init() and set merkle tree depth to 32
+        // call init() and set merkle tree depth to 4
         var res = await testcontract.init({
             tree_depth: 4
           }, {
@@ -440,7 +440,7 @@ describe(`ZEOS Test`, async () => {
           sign: true
         });
 
-        // check if depth is set to 0x20 (32)
+        // check if depth is set to 0x04
         res = await fetch(endpoint + '/v1/chain/get_table_rows', {
           method: 'POST',
           mode: 'cors',

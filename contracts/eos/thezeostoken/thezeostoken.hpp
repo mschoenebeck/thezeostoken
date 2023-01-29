@@ -160,6 +160,7 @@ CONTRACT_START()
         uint64_t note_count;        // number of encrypted notes
         uint64_t leaf_count;        // number of merkle tree leaves
         uint64_t tree_depth;        // merkle tree depth
+        checksum256 tree_root;      // current merkle tree root
     };
     using g_t = singleton<"global"_n, global>;
     g_t global;
@@ -194,7 +195,8 @@ CONTRACT_START()
         const name& ram_payer
     );
     
-    void update_merkle_tree(
+    checksum256 update_merkle_tree(
+        const checksum256& tree_root,
         const uint64_t& leaf_count,
         const uint64_t& tree_depth,
         const vector<const uint8_t*>& leaves

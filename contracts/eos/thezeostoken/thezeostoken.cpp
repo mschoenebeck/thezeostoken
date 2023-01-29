@@ -243,7 +243,7 @@ void thezeostoken::begin(
     // add new note commitments to merkle tree
     if(leaves.size() > 0)
     {
-        update_merkle_tree(stats.leaf_count, stats.tree_depth, leaves);
+        stats.tree_root = update_merkle_tree(stats.tree_root, stats.leaf_count, stats.tree_depth, leaves);
 
         // update global stats
         stats.leaf_count += leaves.size();
@@ -441,7 +441,7 @@ void thezeostoken::init(
     
     // reset global state
     global.remove();
-    global.set({0, 0, tree_depth}, _self);
+    global.set({0, 0, tree_depth, checksum256()}, _self);
 }
 
 void thezeostoken::create(
@@ -647,7 +647,8 @@ asset thezeostoken::get_balance(
     return ac.balance;
 }
 
-void thezeostoken::update_merkle_tree(
+checksum256 thezeostoken::update_merkle_tree(
+    const checksum256& tree_root,
     const uint64_t& leaf_count,
     const uint64_t& tree_depth,
     const vector<const uint8_t*>& leaves
@@ -655,6 +656,8 @@ void thezeostoken::update_merkle_tree(
 {
     // build uri string by concatening all input parameters for the vcpu handler
     string str = "zeos_merkle_tree_updater://";
+    str.append(byte2str<32>(tree_root.extract_as_byte_array().data()));
+    str.append("/");
     str.append(to_string(leaf_count));
     str.append("/");
     str.append(to_string(tree_depth));
@@ -688,11 +691,16 @@ void thezeostoken::update_merkle_tree(
     uint64_t rt1_idx = rt1_tree_idx * MT_ARR_FULL_TREE_OFFSET(tree_depth);
     uint64_t rt2_idx = rt2_tree_idx * MT_ARR_FULL_TREE_OFFSET(tree_depth);
 
+    // check if tree_root didn't change during execution of the vcpu handler function:
+    checksum256 old_root = *reinterpret_cast<array<uint8_t, 32>*>(&res[8]);
+    check(tree_root == old_root, "Merkle tree state changed during vcpu handler execution. Please try again.");
+
     // modify/insert nodes (40 bytes each) into tree
     mt_t tree(_self, _self.value);
     rt_t roots(_self, _self.value);
     check(res.size() % 40 == 0, "Node list must be multiple of 40 bytes: 8 bytes 'index', 32 bytes 'value'");
-    for(int i = 0; i < res.size()/40; i++)
+    checksum256 new_root = checksum256();
+    for(int i = 1; i < res.size()/40; i++)
     {
         uint64_t* idx_ptr = reinterpret_cast<uint64_t*>(&res[i*40]);
         // the following might look a bit 'hacky' but it saves us one memcpy and should be safe according
@@ -721,6 +729,7 @@ void thezeostoken::update_merkle_tree(
             roots.emplace(_self, [&](auto& row) {
                 row.val = val;
             });
+            new_root = val;
         }
         // in case of tree overflow add second root at root2 index as well
         if(rt2_idx != rt1_idx && (*idx_ptr & 0x7FFFFFFFFFFFFFFF) == rt2_idx)
@@ -728,8 +737,11 @@ void thezeostoken::update_merkle_tree(
             roots.emplace(_self, [&](auto& row) {
                 row.val = val;
             });
+            new_root = val;
         }
     }
+
+    return new_root;
 }
 void thezeostoken::testmtupdate(
     const uint64_t& num
@@ -755,7 +767,7 @@ void thezeostoken::testmtupdate(
     // fetch global stats, add leaves, and update global stats
     check(global.exists(), "need to call init first");
     auto g = global.get();
-    update_merkle_tree(g.leaf_count, g.tree_depth, v_);
+    g.tree_root = update_merkle_tree(g.tree_root, g.leaf_count, g.tree_depth, v_);
     // update global stats
     g.leaf_count += v_.size();
     global.set(g, _self);
