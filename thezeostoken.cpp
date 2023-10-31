@@ -81,7 +81,8 @@ void thezeostoken::retire(const asset& quantity, const string& memo)
 void thezeostoken::transfer(const name& from, const name& to, const asset& quantity, const string& memo)
 {
     check(from != to, "cannot transfer to self");
-    require_auth(from);
+    //require_auth(from);
+    check(has_auth(from) || has_auth(_self), "missing authority");
     check(is_account(to), "to account does not exist");
     auto sym = quantity.symbol.code().raw();
     stats statstable(_self, sym);
